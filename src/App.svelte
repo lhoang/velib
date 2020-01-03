@@ -8,19 +8,26 @@
 
 <main>
 	<h1>Stats Vélib</h1>
-
-	<Wheel month="Nov"></Wheel>
-
+	<div class="container">
 	{#await promise}
-	... loading...
+	...loading...
 	{:then data}
-		{#each data as d, i}
-			{i} - {JSON.stringify(d)} <br/>
+		{#each data as [month, courses], i}
+			<Wheel {month}
+				   data={courses}
+				   maxDistance="38"
+				   width="350"
+			></Wheel>
 		{/each}
 	{/await}
+	</div>
 
 </main>
 
 <style>
+	.container {
+		display: flex;
+		flex-direction: row;
+	}
 
 </style>
