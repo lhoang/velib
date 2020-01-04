@@ -82,6 +82,9 @@ var app = (function () {
             throw new Error(`Function called outside component initialization`);
         return current_component;
     }
+    function onMount(fn) {
+        get_current_component().$$.on_mount.push(fn);
+    }
 
     const dirty_components = [];
     const binding_callbacks = [];
@@ -1740,6 +1743,1072 @@ var app = (function () {
       return linearish(scale);
     }
 
+    function nice(domain, interval) {
+      domain = domain.slice();
+
+      var i0 = 0,
+          i1 = domain.length - 1,
+          x0 = domain[i0],
+          x1 = domain[i1],
+          t;
+
+      if (x1 < x0) {
+        t = i0, i0 = i1, i1 = t;
+        t = x0, x0 = x1, x1 = t;
+      }
+
+      domain[i0] = interval.floor(x0);
+      domain[i1] = interval.ceil(x1);
+      return domain;
+    }
+
+    var t0 = new Date,
+        t1 = new Date;
+
+    function newInterval(floori, offseti, count, field) {
+
+      function interval(date) {
+        return floori(date = arguments.length === 0 ? new Date : new Date(+date)), date;
+      }
+
+      interval.floor = function(date) {
+        return floori(date = new Date(+date)), date;
+      };
+
+      interval.ceil = function(date) {
+        return floori(date = new Date(date - 1)), offseti(date, 1), floori(date), date;
+      };
+
+      interval.round = function(date) {
+        var d0 = interval(date),
+            d1 = interval.ceil(date);
+        return date - d0 < d1 - date ? d0 : d1;
+      };
+
+      interval.offset = function(date, step) {
+        return offseti(date = new Date(+date), step == null ? 1 : Math.floor(step)), date;
+      };
+
+      interval.range = function(start, stop, step) {
+        var range = [], previous;
+        start = interval.ceil(start);
+        step = step == null ? 1 : Math.floor(step);
+        if (!(start < stop) || !(step > 0)) return range; // also handles Invalid Date
+        do range.push(previous = new Date(+start)), offseti(start, step), floori(start);
+        while (previous < start && start < stop);
+        return range;
+      };
+
+      interval.filter = function(test) {
+        return newInterval(function(date) {
+          if (date >= date) while (floori(date), !test(date)) date.setTime(date - 1);
+        }, function(date, step) {
+          if (date >= date) {
+            if (step < 0) while (++step <= 0) {
+              while (offseti(date, -1), !test(date)) {} // eslint-disable-line no-empty
+            } else while (--step >= 0) {
+              while (offseti(date, +1), !test(date)) {} // eslint-disable-line no-empty
+            }
+          }
+        });
+      };
+
+      if (count) {
+        interval.count = function(start, end) {
+          t0.setTime(+start), t1.setTime(+end);
+          floori(t0), floori(t1);
+          return Math.floor(count(t0, t1));
+        };
+
+        interval.every = function(step) {
+          step = Math.floor(step);
+          return !isFinite(step) || !(step > 0) ? null
+              : !(step > 1) ? interval
+              : interval.filter(field
+                  ? function(d) { return field(d) % step === 0; }
+                  : function(d) { return interval.count(0, d) % step === 0; });
+        };
+      }
+
+      return interval;
+    }
+
+    var millisecond = newInterval(function() {
+      // noop
+    }, function(date, step) {
+      date.setTime(+date + step);
+    }, function(start, end) {
+      return end - start;
+    });
+
+    // An optimized implementation for this simple case.
+    millisecond.every = function(k) {
+      k = Math.floor(k);
+      if (!isFinite(k) || !(k > 0)) return null;
+      if (!(k > 1)) return millisecond;
+      return newInterval(function(date) {
+        date.setTime(Math.floor(date / k) * k);
+      }, function(date, step) {
+        date.setTime(+date + step * k);
+      }, function(start, end) {
+        return (end - start) / k;
+      });
+    };
+
+    var durationSecond = 1e3;
+    var durationMinute = 6e4;
+    var durationHour = 36e5;
+    var durationDay = 864e5;
+    var durationWeek = 6048e5;
+
+    var second = newInterval(function(date) {
+      date.setTime(date - date.getMilliseconds());
+    }, function(date, step) {
+      date.setTime(+date + step * durationSecond);
+    }, function(start, end) {
+      return (end - start) / durationSecond;
+    }, function(date) {
+      return date.getUTCSeconds();
+    });
+
+    var minute = newInterval(function(date) {
+      date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond);
+    }, function(date, step) {
+      date.setTime(+date + step * durationMinute);
+    }, function(start, end) {
+      return (end - start) / durationMinute;
+    }, function(date) {
+      return date.getMinutes();
+    });
+
+    var hour = newInterval(function(date) {
+      date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond - date.getMinutes() * durationMinute);
+    }, function(date, step) {
+      date.setTime(+date + step * durationHour);
+    }, function(start, end) {
+      return (end - start) / durationHour;
+    }, function(date) {
+      return date.getHours();
+    });
+
+    var day = newInterval(function(date) {
+      date.setHours(0, 0, 0, 0);
+    }, function(date, step) {
+      date.setDate(date.getDate() + step);
+    }, function(start, end) {
+      return (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationDay;
+    }, function(date) {
+      return date.getDate() - 1;
+    });
+
+    function weekday(i) {
+      return newInterval(function(date) {
+        date.setDate(date.getDate() - (date.getDay() + 7 - i) % 7);
+        date.setHours(0, 0, 0, 0);
+      }, function(date, step) {
+        date.setDate(date.getDate() + step * 7);
+      }, function(start, end) {
+        return (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationWeek;
+      });
+    }
+
+    var sunday = weekday(0);
+    var monday = weekday(1);
+    var tuesday = weekday(2);
+    var wednesday = weekday(3);
+    var thursday = weekday(4);
+    var friday = weekday(5);
+    var saturday = weekday(6);
+
+    var month = newInterval(function(date) {
+      date.setDate(1);
+      date.setHours(0, 0, 0, 0);
+    }, function(date, step) {
+      date.setMonth(date.getMonth() + step);
+    }, function(start, end) {
+      return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
+    }, function(date) {
+      return date.getMonth();
+    });
+
+    var year = newInterval(function(date) {
+      date.setMonth(0, 1);
+      date.setHours(0, 0, 0, 0);
+    }, function(date, step) {
+      date.setFullYear(date.getFullYear() + step);
+    }, function(start, end) {
+      return end.getFullYear() - start.getFullYear();
+    }, function(date) {
+      return date.getFullYear();
+    });
+
+    // An optimized implementation for this simple case.
+    year.every = function(k) {
+      return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : newInterval(function(date) {
+        date.setFullYear(Math.floor(date.getFullYear() / k) * k);
+        date.setMonth(0, 1);
+        date.setHours(0, 0, 0, 0);
+      }, function(date, step) {
+        date.setFullYear(date.getFullYear() + step * k);
+      });
+    };
+
+    var utcDay = newInterval(function(date) {
+      date.setUTCHours(0, 0, 0, 0);
+    }, function(date, step) {
+      date.setUTCDate(date.getUTCDate() + step);
+    }, function(start, end) {
+      return (end - start) / durationDay;
+    }, function(date) {
+      return date.getUTCDate() - 1;
+    });
+
+    function utcWeekday(i) {
+      return newInterval(function(date) {
+        date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 7 - i) % 7);
+        date.setUTCHours(0, 0, 0, 0);
+      }, function(date, step) {
+        date.setUTCDate(date.getUTCDate() + step * 7);
+      }, function(start, end) {
+        return (end - start) / durationWeek;
+      });
+    }
+
+    var utcSunday = utcWeekday(0);
+    var utcMonday = utcWeekday(1);
+    var utcTuesday = utcWeekday(2);
+    var utcWednesday = utcWeekday(3);
+    var utcThursday = utcWeekday(4);
+    var utcFriday = utcWeekday(5);
+    var utcSaturday = utcWeekday(6);
+
+    var utcYear = newInterval(function(date) {
+      date.setUTCMonth(0, 1);
+      date.setUTCHours(0, 0, 0, 0);
+    }, function(date, step) {
+      date.setUTCFullYear(date.getUTCFullYear() + step);
+    }, function(start, end) {
+      return end.getUTCFullYear() - start.getUTCFullYear();
+    }, function(date) {
+      return date.getUTCFullYear();
+    });
+
+    // An optimized implementation for this simple case.
+    utcYear.every = function(k) {
+      return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : newInterval(function(date) {
+        date.setUTCFullYear(Math.floor(date.getUTCFullYear() / k) * k);
+        date.setUTCMonth(0, 1);
+        date.setUTCHours(0, 0, 0, 0);
+      }, function(date, step) {
+        date.setUTCFullYear(date.getUTCFullYear() + step * k);
+      });
+    };
+
+    function localDate(d) {
+      if (0 <= d.y && d.y < 100) {
+        var date = new Date(-1, d.m, d.d, d.H, d.M, d.S, d.L);
+        date.setFullYear(d.y);
+        return date;
+      }
+      return new Date(d.y, d.m, d.d, d.H, d.M, d.S, d.L);
+    }
+
+    function utcDate(d) {
+      if (0 <= d.y && d.y < 100) {
+        var date = new Date(Date.UTC(-1, d.m, d.d, d.H, d.M, d.S, d.L));
+        date.setUTCFullYear(d.y);
+        return date;
+      }
+      return new Date(Date.UTC(d.y, d.m, d.d, d.H, d.M, d.S, d.L));
+    }
+
+    function newDate(y, m, d) {
+      return {y: y, m: m, d: d, H: 0, M: 0, S: 0, L: 0};
+    }
+
+    function formatLocale$1(locale) {
+      var locale_dateTime = locale.dateTime,
+          locale_date = locale.date,
+          locale_time = locale.time,
+          locale_periods = locale.periods,
+          locale_weekdays = locale.days,
+          locale_shortWeekdays = locale.shortDays,
+          locale_months = locale.months,
+          locale_shortMonths = locale.shortMonths;
+
+      var periodRe = formatRe(locale_periods),
+          periodLookup = formatLookup(locale_periods),
+          weekdayRe = formatRe(locale_weekdays),
+          weekdayLookup = formatLookup(locale_weekdays),
+          shortWeekdayRe = formatRe(locale_shortWeekdays),
+          shortWeekdayLookup = formatLookup(locale_shortWeekdays),
+          monthRe = formatRe(locale_months),
+          monthLookup = formatLookup(locale_months),
+          shortMonthRe = formatRe(locale_shortMonths),
+          shortMonthLookup = formatLookup(locale_shortMonths);
+
+      var formats = {
+        "a": formatShortWeekday,
+        "A": formatWeekday,
+        "b": formatShortMonth,
+        "B": formatMonth,
+        "c": null,
+        "d": formatDayOfMonth,
+        "e": formatDayOfMonth,
+        "f": formatMicroseconds,
+        "H": formatHour24,
+        "I": formatHour12,
+        "j": formatDayOfYear,
+        "L": formatMilliseconds,
+        "m": formatMonthNumber,
+        "M": formatMinutes,
+        "p": formatPeriod,
+        "q": formatQuarter,
+        "Q": formatUnixTimestamp,
+        "s": formatUnixTimestampSeconds,
+        "S": formatSeconds,
+        "u": formatWeekdayNumberMonday,
+        "U": formatWeekNumberSunday,
+        "V": formatWeekNumberISO,
+        "w": formatWeekdayNumberSunday,
+        "W": formatWeekNumberMonday,
+        "x": null,
+        "X": null,
+        "y": formatYear,
+        "Y": formatFullYear,
+        "Z": formatZone,
+        "%": formatLiteralPercent
+      };
+
+      var utcFormats = {
+        "a": formatUTCShortWeekday,
+        "A": formatUTCWeekday,
+        "b": formatUTCShortMonth,
+        "B": formatUTCMonth,
+        "c": null,
+        "d": formatUTCDayOfMonth,
+        "e": formatUTCDayOfMonth,
+        "f": formatUTCMicroseconds,
+        "H": formatUTCHour24,
+        "I": formatUTCHour12,
+        "j": formatUTCDayOfYear,
+        "L": formatUTCMilliseconds,
+        "m": formatUTCMonthNumber,
+        "M": formatUTCMinutes,
+        "p": formatUTCPeriod,
+        "q": formatUTCQuarter,
+        "Q": formatUnixTimestamp,
+        "s": formatUnixTimestampSeconds,
+        "S": formatUTCSeconds,
+        "u": formatUTCWeekdayNumberMonday,
+        "U": formatUTCWeekNumberSunday,
+        "V": formatUTCWeekNumberISO,
+        "w": formatUTCWeekdayNumberSunday,
+        "W": formatUTCWeekNumberMonday,
+        "x": null,
+        "X": null,
+        "y": formatUTCYear,
+        "Y": formatUTCFullYear,
+        "Z": formatUTCZone,
+        "%": formatLiteralPercent
+      };
+
+      var parses = {
+        "a": parseShortWeekday,
+        "A": parseWeekday,
+        "b": parseShortMonth,
+        "B": parseMonth,
+        "c": parseLocaleDateTime,
+        "d": parseDayOfMonth,
+        "e": parseDayOfMonth,
+        "f": parseMicroseconds,
+        "H": parseHour24,
+        "I": parseHour24,
+        "j": parseDayOfYear,
+        "L": parseMilliseconds,
+        "m": parseMonthNumber,
+        "M": parseMinutes,
+        "p": parsePeriod,
+        "q": parseQuarter,
+        "Q": parseUnixTimestamp,
+        "s": parseUnixTimestampSeconds,
+        "S": parseSeconds,
+        "u": parseWeekdayNumberMonday,
+        "U": parseWeekNumberSunday,
+        "V": parseWeekNumberISO,
+        "w": parseWeekdayNumberSunday,
+        "W": parseWeekNumberMonday,
+        "x": parseLocaleDate,
+        "X": parseLocaleTime,
+        "y": parseYear,
+        "Y": parseFullYear,
+        "Z": parseZone,
+        "%": parseLiteralPercent
+      };
+
+      // These recursive directive definitions must be deferred.
+      formats.x = newFormat(locale_date, formats);
+      formats.X = newFormat(locale_time, formats);
+      formats.c = newFormat(locale_dateTime, formats);
+      utcFormats.x = newFormat(locale_date, utcFormats);
+      utcFormats.X = newFormat(locale_time, utcFormats);
+      utcFormats.c = newFormat(locale_dateTime, utcFormats);
+
+      function newFormat(specifier, formats) {
+        return function(date) {
+          var string = [],
+              i = -1,
+              j = 0,
+              n = specifier.length,
+              c,
+              pad,
+              format;
+
+          if (!(date instanceof Date)) date = new Date(+date);
+
+          while (++i < n) {
+            if (specifier.charCodeAt(i) === 37) {
+              string.push(specifier.slice(j, i));
+              if ((pad = pads[c = specifier.charAt(++i)]) != null) c = specifier.charAt(++i);
+              else pad = c === "e" ? " " : "0";
+              if (format = formats[c]) c = format(date, pad);
+              string.push(c);
+              j = i + 1;
+            }
+          }
+
+          string.push(specifier.slice(j, i));
+          return string.join("");
+        };
+      }
+
+      function newParse(specifier, Z) {
+        return function(string) {
+          var d = newDate(1900, undefined, 1),
+              i = parseSpecifier(d, specifier, string += "", 0),
+              week, day$1;
+          if (i != string.length) return null;
+
+          // If a UNIX timestamp is specified, return it.
+          if ("Q" in d) return new Date(d.Q);
+          if ("s" in d) return new Date(d.s * 1000 + ("L" in d ? d.L : 0));
+
+          // If this is utcParse, never use the local timezone.
+          if (Z && !("Z" in d)) d.Z = 0;
+
+          // The am-pm flag is 0 for AM, and 1 for PM.
+          if ("p" in d) d.H = d.H % 12 + d.p * 12;
+
+          // If the month was not specified, inherit from the quarter.
+          if (d.m === undefined) d.m = "q" in d ? d.q : 0;
+
+          // Convert day-of-week and week-of-year to day-of-year.
+          if ("V" in d) {
+            if (d.V < 1 || d.V > 53) return null;
+            if (!("w" in d)) d.w = 1;
+            if ("Z" in d) {
+              week = utcDate(newDate(d.y, 0, 1)), day$1 = week.getUTCDay();
+              week = day$1 > 4 || day$1 === 0 ? utcMonday.ceil(week) : utcMonday(week);
+              week = utcDay.offset(week, (d.V - 1) * 7);
+              d.y = week.getUTCFullYear();
+              d.m = week.getUTCMonth();
+              d.d = week.getUTCDate() + (d.w + 6) % 7;
+            } else {
+              week = localDate(newDate(d.y, 0, 1)), day$1 = week.getDay();
+              week = day$1 > 4 || day$1 === 0 ? monday.ceil(week) : monday(week);
+              week = day.offset(week, (d.V - 1) * 7);
+              d.y = week.getFullYear();
+              d.m = week.getMonth();
+              d.d = week.getDate() + (d.w + 6) % 7;
+            }
+          } else if ("W" in d || "U" in d) {
+            if (!("w" in d)) d.w = "u" in d ? d.u % 7 : "W" in d ? 1 : 0;
+            day$1 = "Z" in d ? utcDate(newDate(d.y, 0, 1)).getUTCDay() : localDate(newDate(d.y, 0, 1)).getDay();
+            d.m = 0;
+            d.d = "W" in d ? (d.w + 6) % 7 + d.W * 7 - (day$1 + 5) % 7 : d.w + d.U * 7 - (day$1 + 6) % 7;
+          }
+
+          // If a time zone is specified, all fields are interpreted as UTC and then
+          // offset according to the specified time zone.
+          if ("Z" in d) {
+            d.H += d.Z / 100 | 0;
+            d.M += d.Z % 100;
+            return utcDate(d);
+          }
+
+          // Otherwise, all fields are in local time.
+          return localDate(d);
+        };
+      }
+
+      function parseSpecifier(d, specifier, string, j) {
+        var i = 0,
+            n = specifier.length,
+            m = string.length,
+            c,
+            parse;
+
+        while (i < n) {
+          if (j >= m) return -1;
+          c = specifier.charCodeAt(i++);
+          if (c === 37) {
+            c = specifier.charAt(i++);
+            parse = parses[c in pads ? specifier.charAt(i++) : c];
+            if (!parse || ((j = parse(d, string, j)) < 0)) return -1;
+          } else if (c != string.charCodeAt(j++)) {
+            return -1;
+          }
+        }
+
+        return j;
+      }
+
+      function parsePeriod(d, string, i) {
+        var n = periodRe.exec(string.slice(i));
+        return n ? (d.p = periodLookup[n[0].toLowerCase()], i + n[0].length) : -1;
+      }
+
+      function parseShortWeekday(d, string, i) {
+        var n = shortWeekdayRe.exec(string.slice(i));
+        return n ? (d.w = shortWeekdayLookup[n[0].toLowerCase()], i + n[0].length) : -1;
+      }
+
+      function parseWeekday(d, string, i) {
+        var n = weekdayRe.exec(string.slice(i));
+        return n ? (d.w = weekdayLookup[n[0].toLowerCase()], i + n[0].length) : -1;
+      }
+
+      function parseShortMonth(d, string, i) {
+        var n = shortMonthRe.exec(string.slice(i));
+        return n ? (d.m = shortMonthLookup[n[0].toLowerCase()], i + n[0].length) : -1;
+      }
+
+      function parseMonth(d, string, i) {
+        var n = monthRe.exec(string.slice(i));
+        return n ? (d.m = monthLookup[n[0].toLowerCase()], i + n[0].length) : -1;
+      }
+
+      function parseLocaleDateTime(d, string, i) {
+        return parseSpecifier(d, locale_dateTime, string, i);
+      }
+
+      function parseLocaleDate(d, string, i) {
+        return parseSpecifier(d, locale_date, string, i);
+      }
+
+      function parseLocaleTime(d, string, i) {
+        return parseSpecifier(d, locale_time, string, i);
+      }
+
+      function formatShortWeekday(d) {
+        return locale_shortWeekdays[d.getDay()];
+      }
+
+      function formatWeekday(d) {
+        return locale_weekdays[d.getDay()];
+      }
+
+      function formatShortMonth(d) {
+        return locale_shortMonths[d.getMonth()];
+      }
+
+      function formatMonth(d) {
+        return locale_months[d.getMonth()];
+      }
+
+      function formatPeriod(d) {
+        return locale_periods[+(d.getHours() >= 12)];
+      }
+
+      function formatQuarter(d) {
+        return 1 + ~~(d.getMonth() / 3);
+      }
+
+      function formatUTCShortWeekday(d) {
+        return locale_shortWeekdays[d.getUTCDay()];
+      }
+
+      function formatUTCWeekday(d) {
+        return locale_weekdays[d.getUTCDay()];
+      }
+
+      function formatUTCShortMonth(d) {
+        return locale_shortMonths[d.getUTCMonth()];
+      }
+
+      function formatUTCMonth(d) {
+        return locale_months[d.getUTCMonth()];
+      }
+
+      function formatUTCPeriod(d) {
+        return locale_periods[+(d.getUTCHours() >= 12)];
+      }
+
+      function formatUTCQuarter(d) {
+        return 1 + ~~(d.getUTCMonth() / 3);
+      }
+
+      return {
+        format: function(specifier) {
+          var f = newFormat(specifier += "", formats);
+          f.toString = function() { return specifier; };
+          return f;
+        },
+        parse: function(specifier) {
+          var p = newParse(specifier += "", false);
+          p.toString = function() { return specifier; };
+          return p;
+        },
+        utcFormat: function(specifier) {
+          var f = newFormat(specifier += "", utcFormats);
+          f.toString = function() { return specifier; };
+          return f;
+        },
+        utcParse: function(specifier) {
+          var p = newParse(specifier += "", true);
+          p.toString = function() { return specifier; };
+          return p;
+        }
+      };
+    }
+
+    var pads = {"-": "", "_": " ", "0": "0"},
+        numberRe = /^\s*\d+/, // note: ignores next directive
+        percentRe = /^%/,
+        requoteRe = /[\\^$*+?|[\]().{}]/g;
+
+    function pad(value, fill, width) {
+      var sign = value < 0 ? "-" : "",
+          string = (sign ? -value : value) + "",
+          length = string.length;
+      return sign + (length < width ? new Array(width - length + 1).join(fill) + string : string);
+    }
+
+    function requote(s) {
+      return s.replace(requoteRe, "\\$&");
+    }
+
+    function formatRe(names) {
+      return new RegExp("^(?:" + names.map(requote).join("|") + ")", "i");
+    }
+
+    function formatLookup(names) {
+      var map = {}, i = -1, n = names.length;
+      while (++i < n) map[names[i].toLowerCase()] = i;
+      return map;
+    }
+
+    function parseWeekdayNumberSunday(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 1));
+      return n ? (d.w = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseWeekdayNumberMonday(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 1));
+      return n ? (d.u = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseWeekNumberSunday(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.U = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseWeekNumberISO(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.V = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseWeekNumberMonday(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.W = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseFullYear(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 4));
+      return n ? (d.y = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseYear(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.y = +n[0] + (+n[0] > 68 ? 1900 : 2000), i + n[0].length) : -1;
+    }
+
+    function parseZone(d, string, i) {
+      var n = /^(Z)|([+-]\d\d)(?::?(\d\d))?/.exec(string.slice(i, i + 6));
+      return n ? (d.Z = n[1] ? 0 : -(n[2] + (n[3] || "00")), i + n[0].length) : -1;
+    }
+
+    function parseQuarter(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 1));
+      return n ? (d.q = n[0] * 3 - 3, i + n[0].length) : -1;
+    }
+
+    function parseMonthNumber(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.m = n[0] - 1, i + n[0].length) : -1;
+    }
+
+    function parseDayOfMonth(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.d = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseDayOfYear(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 3));
+      return n ? (d.m = 0, d.d = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseHour24(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.H = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseMinutes(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.M = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseSeconds(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 2));
+      return n ? (d.S = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseMilliseconds(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 3));
+      return n ? (d.L = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseMicroseconds(d, string, i) {
+      var n = numberRe.exec(string.slice(i, i + 6));
+      return n ? (d.L = Math.floor(n[0] / 1000), i + n[0].length) : -1;
+    }
+
+    function parseLiteralPercent(d, string, i) {
+      var n = percentRe.exec(string.slice(i, i + 1));
+      return n ? i + n[0].length : -1;
+    }
+
+    function parseUnixTimestamp(d, string, i) {
+      var n = numberRe.exec(string.slice(i));
+      return n ? (d.Q = +n[0], i + n[0].length) : -1;
+    }
+
+    function parseUnixTimestampSeconds(d, string, i) {
+      var n = numberRe.exec(string.slice(i));
+      return n ? (d.s = +n[0], i + n[0].length) : -1;
+    }
+
+    function formatDayOfMonth(d, p) {
+      return pad(d.getDate(), p, 2);
+    }
+
+    function formatHour24(d, p) {
+      return pad(d.getHours(), p, 2);
+    }
+
+    function formatHour12(d, p) {
+      return pad(d.getHours() % 12 || 12, p, 2);
+    }
+
+    function formatDayOfYear(d, p) {
+      return pad(1 + day.count(year(d), d), p, 3);
+    }
+
+    function formatMilliseconds(d, p) {
+      return pad(d.getMilliseconds(), p, 3);
+    }
+
+    function formatMicroseconds(d, p) {
+      return formatMilliseconds(d, p) + "000";
+    }
+
+    function formatMonthNumber(d, p) {
+      return pad(d.getMonth() + 1, p, 2);
+    }
+
+    function formatMinutes(d, p) {
+      return pad(d.getMinutes(), p, 2);
+    }
+
+    function formatSeconds(d, p) {
+      return pad(d.getSeconds(), p, 2);
+    }
+
+    function formatWeekdayNumberMonday(d) {
+      var day = d.getDay();
+      return day === 0 ? 7 : day;
+    }
+
+    function formatWeekNumberSunday(d, p) {
+      return pad(sunday.count(year(d) - 1, d), p, 2);
+    }
+
+    function formatWeekNumberISO(d, p) {
+      var day = d.getDay();
+      d = (day >= 4 || day === 0) ? thursday(d) : thursday.ceil(d);
+      return pad(thursday.count(year(d), d) + (year(d).getDay() === 4), p, 2);
+    }
+
+    function formatWeekdayNumberSunday(d) {
+      return d.getDay();
+    }
+
+    function formatWeekNumberMonday(d, p) {
+      return pad(monday.count(year(d) - 1, d), p, 2);
+    }
+
+    function formatYear(d, p) {
+      return pad(d.getFullYear() % 100, p, 2);
+    }
+
+    function formatFullYear(d, p) {
+      return pad(d.getFullYear() % 10000, p, 4);
+    }
+
+    function formatZone(d) {
+      var z = d.getTimezoneOffset();
+      return (z > 0 ? "-" : (z *= -1, "+"))
+          + pad(z / 60 | 0, "0", 2)
+          + pad(z % 60, "0", 2);
+    }
+
+    function formatUTCDayOfMonth(d, p) {
+      return pad(d.getUTCDate(), p, 2);
+    }
+
+    function formatUTCHour24(d, p) {
+      return pad(d.getUTCHours(), p, 2);
+    }
+
+    function formatUTCHour12(d, p) {
+      return pad(d.getUTCHours() % 12 || 12, p, 2);
+    }
+
+    function formatUTCDayOfYear(d, p) {
+      return pad(1 + utcDay.count(utcYear(d), d), p, 3);
+    }
+
+    function formatUTCMilliseconds(d, p) {
+      return pad(d.getUTCMilliseconds(), p, 3);
+    }
+
+    function formatUTCMicroseconds(d, p) {
+      return formatUTCMilliseconds(d, p) + "000";
+    }
+
+    function formatUTCMonthNumber(d, p) {
+      return pad(d.getUTCMonth() + 1, p, 2);
+    }
+
+    function formatUTCMinutes(d, p) {
+      return pad(d.getUTCMinutes(), p, 2);
+    }
+
+    function formatUTCSeconds(d, p) {
+      return pad(d.getUTCSeconds(), p, 2);
+    }
+
+    function formatUTCWeekdayNumberMonday(d) {
+      var dow = d.getUTCDay();
+      return dow === 0 ? 7 : dow;
+    }
+
+    function formatUTCWeekNumberSunday(d, p) {
+      return pad(utcSunday.count(utcYear(d) - 1, d), p, 2);
+    }
+
+    function formatUTCWeekNumberISO(d, p) {
+      var day = d.getUTCDay();
+      d = (day >= 4 || day === 0) ? utcThursday(d) : utcThursday.ceil(d);
+      return pad(utcThursday.count(utcYear(d), d) + (utcYear(d).getUTCDay() === 4), p, 2);
+    }
+
+    function formatUTCWeekdayNumberSunday(d) {
+      return d.getUTCDay();
+    }
+
+    function formatUTCWeekNumberMonday(d, p) {
+      return pad(utcMonday.count(utcYear(d) - 1, d), p, 2);
+    }
+
+    function formatUTCYear(d, p) {
+      return pad(d.getUTCFullYear() % 100, p, 2);
+    }
+
+    function formatUTCFullYear(d, p) {
+      return pad(d.getUTCFullYear() % 10000, p, 4);
+    }
+
+    function formatUTCZone() {
+      return "+0000";
+    }
+
+    function formatLiteralPercent() {
+      return "%";
+    }
+
+    function formatUnixTimestamp(d) {
+      return +d;
+    }
+
+    function formatUnixTimestampSeconds(d) {
+      return Math.floor(+d / 1000);
+    }
+
+    var locale$1;
+    var timeFormat;
+    var timeParse;
+    var utcFormat;
+    var utcParse;
+
+    defaultLocale$1({
+      dateTime: "%x, %X",
+      date: "%-m/%-d/%Y",
+      time: "%-I:%M:%S %p",
+      periods: ["AM", "PM"],
+      days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      shortDays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+      shortMonths: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    });
+
+    function defaultLocale$1(definition) {
+      locale$1 = formatLocale$1(definition);
+      timeFormat = locale$1.format;
+      timeParse = locale$1.parse;
+      utcFormat = locale$1.utcFormat;
+      utcParse = locale$1.utcParse;
+      return locale$1;
+    }
+
+    var durationSecond$1 = 1000,
+        durationMinute$1 = durationSecond$1 * 60,
+        durationHour$1 = durationMinute$1 * 60,
+        durationDay$1 = durationHour$1 * 24,
+        durationWeek$1 = durationDay$1 * 7,
+        durationMonth = durationDay$1 * 30,
+        durationYear = durationDay$1 * 365;
+
+    function date$1(t) {
+      return new Date(t);
+    }
+
+    function number$1(t) {
+      return t instanceof Date ? +t : +new Date(+t);
+    }
+
+    function calendar(year, month, week, day, hour, minute, second, millisecond, format) {
+      var scale = continuous(identity, identity),
+          invert = scale.invert,
+          domain = scale.domain;
+
+      var formatMillisecond = format(".%L"),
+          formatSecond = format(":%S"),
+          formatMinute = format("%I:%M"),
+          formatHour = format("%I %p"),
+          formatDay = format("%a %d"),
+          formatWeek = format("%b %d"),
+          formatMonth = format("%B"),
+          formatYear = format("%Y");
+
+      var tickIntervals = [
+        [second,  1,      durationSecond$1],
+        [second,  5,  5 * durationSecond$1],
+        [second, 15, 15 * durationSecond$1],
+        [second, 30, 30 * durationSecond$1],
+        [minute,  1,      durationMinute$1],
+        [minute,  5,  5 * durationMinute$1],
+        [minute, 15, 15 * durationMinute$1],
+        [minute, 30, 30 * durationMinute$1],
+        [  hour,  1,      durationHour$1  ],
+        [  hour,  3,  3 * durationHour$1  ],
+        [  hour,  6,  6 * durationHour$1  ],
+        [  hour, 12, 12 * durationHour$1  ],
+        [   day,  1,      durationDay$1   ],
+        [   day,  2,  2 * durationDay$1   ],
+        [  week,  1,      durationWeek$1  ],
+        [ month,  1,      durationMonth ],
+        [ month,  3,  3 * durationMonth ],
+        [  year,  1,      durationYear  ]
+      ];
+
+      function tickFormat(date) {
+        return (second(date) < date ? formatMillisecond
+            : minute(date) < date ? formatSecond
+            : hour(date) < date ? formatMinute
+            : day(date) < date ? formatHour
+            : month(date) < date ? (week(date) < date ? formatDay : formatWeek)
+            : year(date) < date ? formatMonth
+            : formatYear)(date);
+      }
+
+      function tickInterval(interval, start, stop, step) {
+        if (interval == null) interval = 10;
+
+        // If a desired tick count is specified, pick a reasonable tick interval
+        // based on the extent of the domain and a rough estimate of tick size.
+        // Otherwise, assume interval is already a time interval and use it.
+        if (typeof interval === "number") {
+          var target = Math.abs(stop - start) / interval,
+              i = bisector(function(i) { return i[2]; }).right(tickIntervals, target);
+          if (i === tickIntervals.length) {
+            step = tickStep(start / durationYear, stop / durationYear, interval);
+            interval = year;
+          } else if (i) {
+            i = tickIntervals[target / tickIntervals[i - 1][2] < tickIntervals[i][2] / target ? i - 1 : i];
+            step = i[1];
+            interval = i[0];
+          } else {
+            step = Math.max(tickStep(start, stop, interval), 1);
+            interval = millisecond;
+          }
+        }
+
+        return step == null ? interval : interval.every(step);
+      }
+
+      scale.invert = function(y) {
+        return new Date(invert(y));
+      };
+
+      scale.domain = function(_) {
+        return arguments.length ? domain(map$1.call(_, number$1)) : domain().map(date$1);
+      };
+
+      scale.ticks = function(interval, step) {
+        var d = domain(),
+            t0 = d[0],
+            t1 = d[d.length - 1],
+            r = t1 < t0,
+            t;
+        if (r) t = t0, t0 = t1, t1 = t;
+        t = tickInterval(interval, t0, t1, step);
+        t = t ? t.range(t0, t1 + 1) : []; // inclusive stop
+        return r ? t.reverse() : t;
+      };
+
+      scale.tickFormat = function(count, specifier) {
+        return specifier == null ? tickFormat : format(specifier);
+      };
+
+      scale.nice = function(interval, step) {
+        var d = domain();
+        return (interval = tickInterval(interval, d[0], d[d.length - 1], step))
+            ? domain(nice(d, interval))
+            : scale;
+      };
+
+      scale.copy = function() {
+        return copy(scale, calendar(year, month, week, day, hour, minute, second, millisecond, format));
+      };
+
+      return scale;
+    }
+
+    function scaleTime() {
+      return initRange.apply(calendar(year, month, sunday, day, hour, minute, second, millisecond, timeFormat).domain([new Date(2000, 0, 1), new Date(2000, 0, 2)]), arguments);
+    }
+
     var pi = Math.PI,
         tau = 2 * pi,
         epsilon = 1e-6,
@@ -2154,6 +3223,143 @@ var app = (function () {
       return arc;
     }
 
+    function Linear(context) {
+      this._context = context;
+    }
+
+    Linear.prototype = {
+      areaStart: function() {
+        this._line = 0;
+      },
+      areaEnd: function() {
+        this._line = NaN;
+      },
+      lineStart: function() {
+        this._point = 0;
+      },
+      lineEnd: function() {
+        if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
+        this._line = 1 - this._line;
+      },
+      point: function(x, y) {
+        x = +x, y = +y;
+        switch (this._point) {
+          case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
+          case 1: this._point = 2; // proceed
+          default: this._context.lineTo(x, y); break;
+        }
+      }
+    };
+
+    function curveLinear(context) {
+      return new Linear(context);
+    }
+
+    function x(p) {
+      return p[0];
+    }
+
+    function y(p) {
+      return p[1];
+    }
+
+    function d3line() {
+      var x$1 = x,
+          y$1 = y,
+          defined = constant$2(true),
+          context = null,
+          curve = curveLinear,
+          output = null;
+
+      function line(data) {
+        var i,
+            n = data.length,
+            d,
+            defined0 = false,
+            buffer;
+
+        if (context == null) output = curve(buffer = path());
+
+        for (i = 0; i <= n; ++i) {
+          if (!(i < n && defined(d = data[i], i, data)) === defined0) {
+            if (defined0 = !defined0) output.lineStart();
+            else output.lineEnd();
+          }
+          if (defined0) output.point(+x$1(d, i, data), +y$1(d, i, data));
+        }
+
+        if (buffer) return output = null, buffer + "" || null;
+      }
+
+      line.x = function(_) {
+        return arguments.length ? (x$1 = typeof _ === "function" ? _ : constant$2(+_), line) : x$1;
+      };
+
+      line.y = function(_) {
+        return arguments.length ? (y$1 = typeof _ === "function" ? _ : constant$2(+_), line) : y$1;
+      };
+
+      line.defined = function(_) {
+        return arguments.length ? (defined = typeof _ === "function" ? _ : constant$2(!!_), line) : defined;
+      };
+
+      line.curve = function(_) {
+        return arguments.length ? (curve = _, context != null && (output = curve(context)), line) : curve;
+      };
+
+      line.context = function(_) {
+        return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), line) : context;
+      };
+
+      return line;
+    }
+
+    function Step(context, t) {
+      this._context = context;
+      this._t = t;
+    }
+
+    Step.prototype = {
+      areaStart: function() {
+        this._line = 0;
+      },
+      areaEnd: function() {
+        this._line = NaN;
+      },
+      lineStart: function() {
+        this._x = this._y = NaN;
+        this._point = 0;
+      },
+      lineEnd: function() {
+        if (0 < this._t && this._t < 1 && this._point === 2) this._context.lineTo(this._x, this._y);
+        if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
+        if (this._line >= 0) this._t = 1 - this._t, this._line = 1 - this._line;
+      },
+      point: function(x, y) {
+        x = +x, y = +y;
+        switch (this._point) {
+          case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
+          case 1: this._point = 2; // proceed
+          default: {
+            if (this._t <= 0) {
+              this._context.lineTo(this._x, y);
+              this._context.lineTo(x, y);
+            } else {
+              var x1 = this._x * (1 - this._t) + x * this._t;
+              this._context.lineTo(x1, this._y);
+              this._context.lineTo(x1, y);
+            }
+            break;
+          }
+        }
+        this._x = x, this._y = y;
+      }
+    };
+
+    function stepAfter(context) {
+      return new Step(context, 1);
+    }
+
     var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
     function createCommonjsModule(fn, module) {
@@ -2205,7 +3411,7 @@ var app = (function () {
     		c: function create() {
     			path = svg_element("path");
     			attr_dev(path, "d", path_d_value = /*shape*/ ctx[18]);
-    			attr_dev(path, "class", "svelte-17zjeqa");
+    			attr_dev(path, "class", "svelte-1ihl8vu");
     			add_location(path, file, 60, 20, 1859);
     		},
     		m: function mount(target, anchor) {
@@ -2251,13 +3457,13 @@ var app = (function () {
     			t = text(t_value);
     			attr_dev(path, "id", path_id_value = "week" + /*i*/ ctx[21]);
     			attr_dev(path, "d", path_d_value = /*shape*/ ctx[18]);
-    			attr_dev(path, "class", "svelte-17zjeqa");
+    			attr_dev(path, "class", "svelte-1ihl8vu");
     			add_location(path, file, 69, 20, 2206);
     			attr_dev(textPath, "href", textPath_href_value = "#week" + /*i*/ ctx[21]);
     			attr_dev(textPath, "startOffset", "12%");
     			add_location(textPath, file, 71, 24, 2304);
     			attr_dev(text_1, "dy", "-4");
-    			attr_dev(text_1, "class", "svelte-17zjeqa");
+    			attr_dev(text_1, "class", "svelte-1ihl8vu");
     			add_location(text_1, file, 70, 20, 2265);
     		},
     		m: function mount(target, anchor) {
@@ -2307,11 +3513,11 @@ var app = (function () {
     			attr_dev(circle, "cx", "0");
     			attr_dev(circle, "cy", "0");
     			attr_dev(circle, "r", circle_r_value = /*radiusScale*/ ctx[1](/*level*/ ctx[15]));
-    			attr_dev(circle, "class", "svelte-17zjeqa");
+    			attr_dev(circle, "class", "svelte-1ihl8vu");
     			add_location(circle, file, 79, 20, 2581);
     			attr_dev(text_1, "x", "0");
     			attr_dev(text_1, "y", text_1_y_value = -/*radiusScale*/ ctx[1](/*level*/ ctx[15]));
-    			attr_dev(text_1, "class", "svelte-17zjeqa");
+    			attr_dev(text_1, "class", "svelte-1ihl8vu");
     			add_location(text_1, file, 80, 20, 2658);
     		},
     		m: function mount(target, anchor) {
@@ -2412,34 +3618,34 @@ var app = (function () {
 
     			text2 = svg_element("text");
     			t2 = text("km");
-    			attr_dev(g0, "class", "data svelte-17zjeqa");
+    			attr_dev(g0, "class", "data svelte-1ihl8vu");
     			add_location(g0, file, 58, 12, 1780);
     			attr_dev(text0, "x", "0");
     			attr_dev(text0, "y", "0");
     			attr_dev(text0, "dy", "-5");
-    			attr_dev(text0, "class", "svelte-17zjeqa");
+    			attr_dev(text0, "class", "svelte-1ihl8vu");
     			add_location(text0, file, 64, 16, 1972);
     			attr_dev(text1, "x", "0");
     			attr_dev(text1, "y", "20");
     			attr_dev(text1, "dy", "-5");
-    			attr_dev(text1, "class", "svelte-17zjeqa");
+    			attr_dev(text1, "class", "svelte-1ihl8vu");
     			add_location(text1, file, 65, 16, 2036);
-    			attr_dev(g1, "class", "title svelte-17zjeqa");
+    			attr_dev(g1, "class", "title svelte-1ihl8vu");
     			add_location(g1, file, 63, 12, 1938);
-    			attr_dev(g2, "class", "weeks svelte-17zjeqa");
+    			attr_dev(g2, "class", "weeks svelte-1ihl8vu");
     			add_location(g2, file, 67, 12, 2113);
     			attr_dev(text2, "x", "0");
     			attr_dev(text2, "y", text2_y_value = -/*width*/ ctx[0] / 2 + 20);
-    			attr_dev(text2, "class", "svelte-17zjeqa");
+    			attr_dev(text2, "class", "svelte-1ihl8vu");
     			add_location(text2, file, 82, 16, 2749);
-    			attr_dev(g3, "class", "levels svelte-17zjeqa");
+    			attr_dev(g3, "class", "levels svelte-1ihl8vu");
     			add_location(g3, file, 77, 12, 2502);
     			attr_dev(g4, "transform", g4_transform_value = "translate(" + /*width*/ ctx[0] / 2 + ", " + /*width*/ ctx[0] / 2 + ")");
     			add_location(g4, file, 57, 8, 1720);
     			attr_dev(svg, "width", /*width*/ ctx[0]);
     			attr_dev(svg, "height", /*width*/ ctx[0]);
     			add_location(svg, file, 56, 4, 1677);
-    			attr_dev(div, "class", "container svelte-17zjeqa");
+    			attr_dev(div, "class", "container svelte-1ihl8vu");
     			add_location(div, file, 55, 0, 1649);
     		},
     		l: function claim(nodes) {
@@ -2720,6 +3926,1034 @@ var app = (function () {
     	set maxDistance(value) {
     		throw new Error("<Wheel>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
+    }
+
+    var slice$1 = Array.prototype.slice;
+
+    function identity$2(x) {
+      return x;
+    }
+
+    var top = 1,
+        right = 2,
+        bottom = 3,
+        left = 4,
+        epsilon$2 = 1e-6;
+
+    function translateX(x) {
+      return "translate(" + (x + 0.5) + ",0)";
+    }
+
+    function translateY(y) {
+      return "translate(0," + (y + 0.5) + ")";
+    }
+
+    function number$2(scale) {
+      return function(d) {
+        return +scale(d);
+      };
+    }
+
+    function center(scale) {
+      var offset = Math.max(0, scale.bandwidth() - 1) / 2; // Adjust for 0.5px offset.
+      if (scale.round()) offset = Math.round(offset);
+      return function(d) {
+        return +scale(d) + offset;
+      };
+    }
+
+    function entering() {
+      return !this.__axis;
+    }
+
+    function axis(orient, scale) {
+      var tickArguments = [],
+          tickValues = null,
+          tickFormat = null,
+          tickSizeInner = 6,
+          tickSizeOuter = 6,
+          tickPadding = 3,
+          k = orient === top || orient === left ? -1 : 1,
+          x = orient === left || orient === right ? "x" : "y",
+          transform = orient === top || orient === bottom ? translateX : translateY;
+
+      function axis(context) {
+        var values = tickValues == null ? (scale.ticks ? scale.ticks.apply(scale, tickArguments) : scale.domain()) : tickValues,
+            format = tickFormat == null ? (scale.tickFormat ? scale.tickFormat.apply(scale, tickArguments) : identity$2) : tickFormat,
+            spacing = Math.max(tickSizeInner, 0) + tickPadding,
+            range = scale.range(),
+            range0 = +range[0] + 0.5,
+            range1 = +range[range.length - 1] + 0.5,
+            position = (scale.bandwidth ? center : number$2)(scale.copy()),
+            selection = context.selection ? context.selection() : context,
+            path = selection.selectAll(".domain").data([null]),
+            tick = selection.selectAll(".tick").data(values, scale).order(),
+            tickExit = tick.exit(),
+            tickEnter = tick.enter().append("g").attr("class", "tick"),
+            line = tick.select("line"),
+            text = tick.select("text");
+
+        path = path.merge(path.enter().insert("path", ".tick")
+            .attr("class", "domain")
+            .attr("stroke", "currentColor"));
+
+        tick = tick.merge(tickEnter);
+
+        line = line.merge(tickEnter.append("line")
+            .attr("stroke", "currentColor")
+            .attr(x + "2", k * tickSizeInner));
+
+        text = text.merge(tickEnter.append("text")
+            .attr("fill", "currentColor")
+            .attr(x, k * spacing)
+            .attr("dy", orient === top ? "0em" : orient === bottom ? "0.71em" : "0.32em"));
+
+        if (context !== selection) {
+          path = path.transition(context);
+          tick = tick.transition(context);
+          line = line.transition(context);
+          text = text.transition(context);
+
+          tickExit = tickExit.transition(context)
+              .attr("opacity", epsilon$2)
+              .attr("transform", function(d) { return isFinite(d = position(d)) ? transform(d) : this.getAttribute("transform"); });
+
+          tickEnter
+              .attr("opacity", epsilon$2)
+              .attr("transform", function(d) { var p = this.parentNode.__axis; return transform(p && isFinite(p = p(d)) ? p : position(d)); });
+        }
+
+        tickExit.remove();
+
+        path
+            .attr("d", orient === left || orient == right
+                ? (tickSizeOuter ? "M" + k * tickSizeOuter + "," + range0 + "H0.5V" + range1 + "H" + k * tickSizeOuter : "M0.5," + range0 + "V" + range1)
+                : (tickSizeOuter ? "M" + range0 + "," + k * tickSizeOuter + "V0.5H" + range1 + "V" + k * tickSizeOuter : "M" + range0 + ",0.5H" + range1));
+
+        tick
+            .attr("opacity", 1)
+            .attr("transform", function(d) { return transform(position(d)); });
+
+        line
+            .attr(x + "2", k * tickSizeInner);
+
+        text
+            .attr(x, k * spacing)
+            .text(format);
+
+        selection.filter(entering)
+            .attr("fill", "none")
+            .attr("font-size", 10)
+            .attr("font-family", "sans-serif")
+            .attr("text-anchor", orient === right ? "start" : orient === left ? "end" : "middle");
+
+        selection
+            .each(function() { this.__axis = position; });
+      }
+
+      axis.scale = function(_) {
+        return arguments.length ? (scale = _, axis) : scale;
+      };
+
+      axis.ticks = function() {
+        return tickArguments = slice$1.call(arguments), axis;
+      };
+
+      axis.tickArguments = function(_) {
+        return arguments.length ? (tickArguments = _ == null ? [] : slice$1.call(_), axis) : tickArguments.slice();
+      };
+
+      axis.tickValues = function(_) {
+        return arguments.length ? (tickValues = _ == null ? null : slice$1.call(_), axis) : tickValues && tickValues.slice();
+      };
+
+      axis.tickFormat = function(_) {
+        return arguments.length ? (tickFormat = _, axis) : tickFormat;
+      };
+
+      axis.tickSize = function(_) {
+        return arguments.length ? (tickSizeInner = tickSizeOuter = +_, axis) : tickSizeInner;
+      };
+
+      axis.tickSizeInner = function(_) {
+        return arguments.length ? (tickSizeInner = +_, axis) : tickSizeInner;
+      };
+
+      axis.tickSizeOuter = function(_) {
+        return arguments.length ? (tickSizeOuter = +_, axis) : tickSizeOuter;
+      };
+
+      axis.tickPadding = function(_) {
+        return arguments.length ? (tickPadding = +_, axis) : tickPadding;
+      };
+
+      return axis;
+    }
+
+    function axisRight(scale) {
+      return axis(right, scale);
+    }
+
+    function axisBottom(scale) {
+      return axis(bottom, scale);
+    }
+
+    var xhtml = "http://www.w3.org/1999/xhtml";
+
+    var namespaces = {
+      svg: "http://www.w3.org/2000/svg",
+      xhtml: xhtml,
+      xlink: "http://www.w3.org/1999/xlink",
+      xml: "http://www.w3.org/XML/1998/namespace",
+      xmlns: "http://www.w3.org/2000/xmlns/"
+    };
+
+    function namespace(name) {
+      var prefix = name += "", i = prefix.indexOf(":");
+      if (i >= 0 && (prefix = name.slice(0, i)) !== "xmlns") name = name.slice(i + 1);
+      return namespaces.hasOwnProperty(prefix) ? {space: namespaces[prefix], local: name} : name;
+    }
+
+    function creatorInherit(name) {
+      return function() {
+        var document = this.ownerDocument,
+            uri = this.namespaceURI;
+        return uri === xhtml && document.documentElement.namespaceURI === xhtml
+            ? document.createElement(name)
+            : document.createElementNS(uri, name);
+      };
+    }
+
+    function creatorFixed(fullname) {
+      return function() {
+        return this.ownerDocument.createElementNS(fullname.space, fullname.local);
+      };
+    }
+
+    function creator(name) {
+      var fullname = namespace(name);
+      return (fullname.local
+          ? creatorFixed
+          : creatorInherit)(fullname);
+    }
+
+    function none() {}
+
+    function selector(selector) {
+      return selector == null ? none : function() {
+        return this.querySelector(selector);
+      };
+    }
+
+    function selection_select(select) {
+      if (typeof select !== "function") select = selector(select);
+
+      for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, subgroup = subgroups[j] = new Array(n), node, subnode, i = 0; i < n; ++i) {
+          if ((node = group[i]) && (subnode = select.call(node, node.__data__, i, group))) {
+            if ("__data__" in node) subnode.__data__ = node.__data__;
+            subgroup[i] = subnode;
+          }
+        }
+      }
+
+      return new Selection(subgroups, this._parents);
+    }
+
+    function empty$1() {
+      return [];
+    }
+
+    function selectorAll(selector) {
+      return selector == null ? empty$1 : function() {
+        return this.querySelectorAll(selector);
+      };
+    }
+
+    function selection_selectAll(select) {
+      if (typeof select !== "function") select = selectorAll(select);
+
+      for (var groups = this._groups, m = groups.length, subgroups = [], parents = [], j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) {
+          if (node = group[i]) {
+            subgroups.push(select.call(node, node.__data__, i, group));
+            parents.push(node);
+          }
+        }
+      }
+
+      return new Selection(subgroups, parents);
+    }
+
+    function matcher(selector) {
+      return function() {
+        return this.matches(selector);
+      };
+    }
+
+    function selection_filter(match) {
+      if (typeof match !== "function") match = matcher(match);
+
+      for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, subgroup = subgroups[j] = [], node, i = 0; i < n; ++i) {
+          if ((node = group[i]) && match.call(node, node.__data__, i, group)) {
+            subgroup.push(node);
+          }
+        }
+      }
+
+      return new Selection(subgroups, this._parents);
+    }
+
+    function sparse(update) {
+      return new Array(update.length);
+    }
+
+    function selection_enter() {
+      return new Selection(this._enter || this._groups.map(sparse), this._parents);
+    }
+
+    function EnterNode(parent, datum) {
+      this.ownerDocument = parent.ownerDocument;
+      this.namespaceURI = parent.namespaceURI;
+      this._next = null;
+      this._parent = parent;
+      this.__data__ = datum;
+    }
+
+    EnterNode.prototype = {
+      constructor: EnterNode,
+      appendChild: function(child) { return this._parent.insertBefore(child, this._next); },
+      insertBefore: function(child, next) { return this._parent.insertBefore(child, next); },
+      querySelector: function(selector) { return this._parent.querySelector(selector); },
+      querySelectorAll: function(selector) { return this._parent.querySelectorAll(selector); }
+    };
+
+    function constant$3(x) {
+      return function() {
+        return x;
+      };
+    }
+
+    var keyPrefix = "$"; // Protect against keys like “__proto__”.
+
+    function bindIndex(parent, group, enter, update, exit, data) {
+      var i = 0,
+          node,
+          groupLength = group.length,
+          dataLength = data.length;
+
+      // Put any non-null nodes that fit into update.
+      // Put any null nodes into enter.
+      // Put any remaining data into enter.
+      for (; i < dataLength; ++i) {
+        if (node = group[i]) {
+          node.__data__ = data[i];
+          update[i] = node;
+        } else {
+          enter[i] = new EnterNode(parent, data[i]);
+        }
+      }
+
+      // Put any non-null nodes that don’t fit into exit.
+      for (; i < groupLength; ++i) {
+        if (node = group[i]) {
+          exit[i] = node;
+        }
+      }
+    }
+
+    function bindKey(parent, group, enter, update, exit, data, key) {
+      var i,
+          node,
+          nodeByKeyValue = {},
+          groupLength = group.length,
+          dataLength = data.length,
+          keyValues = new Array(groupLength),
+          keyValue;
+
+      // Compute the key for each node.
+      // If multiple nodes have the same key, the duplicates are added to exit.
+      for (i = 0; i < groupLength; ++i) {
+        if (node = group[i]) {
+          keyValues[i] = keyValue = keyPrefix + key.call(node, node.__data__, i, group);
+          if (keyValue in nodeByKeyValue) {
+            exit[i] = node;
+          } else {
+            nodeByKeyValue[keyValue] = node;
+          }
+        }
+      }
+
+      // Compute the key for each datum.
+      // If there a node associated with this key, join and add it to update.
+      // If there is not (or the key is a duplicate), add it to enter.
+      for (i = 0; i < dataLength; ++i) {
+        keyValue = keyPrefix + key.call(parent, data[i], i, data);
+        if (node = nodeByKeyValue[keyValue]) {
+          update[i] = node;
+          node.__data__ = data[i];
+          nodeByKeyValue[keyValue] = null;
+        } else {
+          enter[i] = new EnterNode(parent, data[i]);
+        }
+      }
+
+      // Add any remaining nodes that were not bound to data to exit.
+      for (i = 0; i < groupLength; ++i) {
+        if ((node = group[i]) && (nodeByKeyValue[keyValues[i]] === node)) {
+          exit[i] = node;
+        }
+      }
+    }
+
+    function selection_data(value, key) {
+      if (!value) {
+        data = new Array(this.size()), j = -1;
+        this.each(function(d) { data[++j] = d; });
+        return data;
+      }
+
+      var bind = key ? bindKey : bindIndex,
+          parents = this._parents,
+          groups = this._groups;
+
+      if (typeof value !== "function") value = constant$3(value);
+
+      for (var m = groups.length, update = new Array(m), enter = new Array(m), exit = new Array(m), j = 0; j < m; ++j) {
+        var parent = parents[j],
+            group = groups[j],
+            groupLength = group.length,
+            data = value.call(parent, parent && parent.__data__, j, parents),
+            dataLength = data.length,
+            enterGroup = enter[j] = new Array(dataLength),
+            updateGroup = update[j] = new Array(dataLength),
+            exitGroup = exit[j] = new Array(groupLength);
+
+        bind(parent, group, enterGroup, updateGroup, exitGroup, data, key);
+
+        // Now connect the enter nodes to their following update node, such that
+        // appendChild can insert the materialized enter node before this node,
+        // rather than at the end of the parent node.
+        for (var i0 = 0, i1 = 0, previous, next; i0 < dataLength; ++i0) {
+          if (previous = enterGroup[i0]) {
+            if (i0 >= i1) i1 = i0 + 1;
+            while (!(next = updateGroup[i1]) && ++i1 < dataLength);
+            previous._next = next || null;
+          }
+        }
+      }
+
+      update = new Selection(update, parents);
+      update._enter = enter;
+      update._exit = exit;
+      return update;
+    }
+
+    function selection_exit() {
+      return new Selection(this._exit || this._groups.map(sparse), this._parents);
+    }
+
+    function selection_join(onenter, onupdate, onexit) {
+      var enter = this.enter(), update = this, exit = this.exit();
+      enter = typeof onenter === "function" ? onenter(enter) : enter.append(onenter + "");
+      if (onupdate != null) update = onupdate(update);
+      if (onexit == null) exit.remove(); else onexit(exit);
+      return enter && update ? enter.merge(update).order() : update;
+    }
+
+    function selection_merge(selection) {
+
+      for (var groups0 = this._groups, groups1 = selection._groups, m0 = groups0.length, m1 = groups1.length, m = Math.min(m0, m1), merges = new Array(m0), j = 0; j < m; ++j) {
+        for (var group0 = groups0[j], group1 = groups1[j], n = group0.length, merge = merges[j] = new Array(n), node, i = 0; i < n; ++i) {
+          if (node = group0[i] || group1[i]) {
+            merge[i] = node;
+          }
+        }
+      }
+
+      for (; j < m0; ++j) {
+        merges[j] = groups0[j];
+      }
+
+      return new Selection(merges, this._parents);
+    }
+
+    function selection_order() {
+
+      for (var groups = this._groups, j = -1, m = groups.length; ++j < m;) {
+        for (var group = groups[j], i = group.length - 1, next = group[i], node; --i >= 0;) {
+          if (node = group[i]) {
+            if (next && node.compareDocumentPosition(next) ^ 4) next.parentNode.insertBefore(node, next);
+            next = node;
+          }
+        }
+      }
+
+      return this;
+    }
+
+    function selection_sort(compare) {
+      if (!compare) compare = ascending$1;
+
+      function compareNode(a, b) {
+        return a && b ? compare(a.__data__, b.__data__) : !a - !b;
+      }
+
+      for (var groups = this._groups, m = groups.length, sortgroups = new Array(m), j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, sortgroup = sortgroups[j] = new Array(n), node, i = 0; i < n; ++i) {
+          if (node = group[i]) {
+            sortgroup[i] = node;
+          }
+        }
+        sortgroup.sort(compareNode);
+      }
+
+      return new Selection(sortgroups, this._parents).order();
+    }
+
+    function ascending$1(a, b) {
+      return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
+    }
+
+    function selection_call() {
+      var callback = arguments[0];
+      arguments[0] = this;
+      callback.apply(null, arguments);
+      return this;
+    }
+
+    function selection_nodes() {
+      var nodes = new Array(this.size()), i = -1;
+      this.each(function() { nodes[++i] = this; });
+      return nodes;
+    }
+
+    function selection_node() {
+
+      for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) {
+        for (var group = groups[j], i = 0, n = group.length; i < n; ++i) {
+          var node = group[i];
+          if (node) return node;
+        }
+      }
+
+      return null;
+    }
+
+    function selection_size() {
+      var size = 0;
+      this.each(function() { ++size; });
+      return size;
+    }
+
+    function selection_empty() {
+      return !this.node();
+    }
+
+    function selection_each(callback) {
+
+      for (var groups = this._groups, j = 0, m = groups.length; j < m; ++j) {
+        for (var group = groups[j], i = 0, n = group.length, node; i < n; ++i) {
+          if (node = group[i]) callback.call(node, node.__data__, i, group);
+        }
+      }
+
+      return this;
+    }
+
+    function attrRemove(name) {
+      return function() {
+        this.removeAttribute(name);
+      };
+    }
+
+    function attrRemoveNS(fullname) {
+      return function() {
+        this.removeAttributeNS(fullname.space, fullname.local);
+      };
+    }
+
+    function attrConstant(name, value) {
+      return function() {
+        this.setAttribute(name, value);
+      };
+    }
+
+    function attrConstantNS(fullname, value) {
+      return function() {
+        this.setAttributeNS(fullname.space, fullname.local, value);
+      };
+    }
+
+    function attrFunction(name, value) {
+      return function() {
+        var v = value.apply(this, arguments);
+        if (v == null) this.removeAttribute(name);
+        else this.setAttribute(name, v);
+      };
+    }
+
+    function attrFunctionNS(fullname, value) {
+      return function() {
+        var v = value.apply(this, arguments);
+        if (v == null) this.removeAttributeNS(fullname.space, fullname.local);
+        else this.setAttributeNS(fullname.space, fullname.local, v);
+      };
+    }
+
+    function selection_attr(name, value) {
+      var fullname = namespace(name);
+
+      if (arguments.length < 2) {
+        var node = this.node();
+        return fullname.local
+            ? node.getAttributeNS(fullname.space, fullname.local)
+            : node.getAttribute(fullname);
+      }
+
+      return this.each((value == null
+          ? (fullname.local ? attrRemoveNS : attrRemove) : (typeof value === "function"
+          ? (fullname.local ? attrFunctionNS : attrFunction)
+          : (fullname.local ? attrConstantNS : attrConstant)))(fullname, value));
+    }
+
+    function defaultView(node) {
+      return (node.ownerDocument && node.ownerDocument.defaultView) // node is a Node
+          || (node.document && node) // node is a Window
+          || node.defaultView; // node is a Document
+    }
+
+    function styleRemove(name) {
+      return function() {
+        this.style.removeProperty(name);
+      };
+    }
+
+    function styleConstant(name, value, priority) {
+      return function() {
+        this.style.setProperty(name, value, priority);
+      };
+    }
+
+    function styleFunction(name, value, priority) {
+      return function() {
+        var v = value.apply(this, arguments);
+        if (v == null) this.style.removeProperty(name);
+        else this.style.setProperty(name, v, priority);
+      };
+    }
+
+    function selection_style(name, value, priority) {
+      return arguments.length > 1
+          ? this.each((value == null
+                ? styleRemove : typeof value === "function"
+                ? styleFunction
+                : styleConstant)(name, value, priority == null ? "" : priority))
+          : styleValue(this.node(), name);
+    }
+
+    function styleValue(node, name) {
+      return node.style.getPropertyValue(name)
+          || defaultView(node).getComputedStyle(node, null).getPropertyValue(name);
+    }
+
+    function propertyRemove(name) {
+      return function() {
+        delete this[name];
+      };
+    }
+
+    function propertyConstant(name, value) {
+      return function() {
+        this[name] = value;
+      };
+    }
+
+    function propertyFunction(name, value) {
+      return function() {
+        var v = value.apply(this, arguments);
+        if (v == null) delete this[name];
+        else this[name] = v;
+      };
+    }
+
+    function selection_property(name, value) {
+      return arguments.length > 1
+          ? this.each((value == null
+              ? propertyRemove : typeof value === "function"
+              ? propertyFunction
+              : propertyConstant)(name, value))
+          : this.node()[name];
+    }
+
+    function classArray(string) {
+      return string.trim().split(/^|\s+/);
+    }
+
+    function classList(node) {
+      return node.classList || new ClassList(node);
+    }
+
+    function ClassList(node) {
+      this._node = node;
+      this._names = classArray(node.getAttribute("class") || "");
+    }
+
+    ClassList.prototype = {
+      add: function(name) {
+        var i = this._names.indexOf(name);
+        if (i < 0) {
+          this._names.push(name);
+          this._node.setAttribute("class", this._names.join(" "));
+        }
+      },
+      remove: function(name) {
+        var i = this._names.indexOf(name);
+        if (i >= 0) {
+          this._names.splice(i, 1);
+          this._node.setAttribute("class", this._names.join(" "));
+        }
+      },
+      contains: function(name) {
+        return this._names.indexOf(name) >= 0;
+      }
+    };
+
+    function classedAdd(node, names) {
+      var list = classList(node), i = -1, n = names.length;
+      while (++i < n) list.add(names[i]);
+    }
+
+    function classedRemove(node, names) {
+      var list = classList(node), i = -1, n = names.length;
+      while (++i < n) list.remove(names[i]);
+    }
+
+    function classedTrue(names) {
+      return function() {
+        classedAdd(this, names);
+      };
+    }
+
+    function classedFalse(names) {
+      return function() {
+        classedRemove(this, names);
+      };
+    }
+
+    function classedFunction(names, value) {
+      return function() {
+        (value.apply(this, arguments) ? classedAdd : classedRemove)(this, names);
+      };
+    }
+
+    function selection_classed(name, value) {
+      var names = classArray(name + "");
+
+      if (arguments.length < 2) {
+        var list = classList(this.node()), i = -1, n = names.length;
+        while (++i < n) if (!list.contains(names[i])) return false;
+        return true;
+      }
+
+      return this.each((typeof value === "function"
+          ? classedFunction : value
+          ? classedTrue
+          : classedFalse)(names, value));
+    }
+
+    function textRemove() {
+      this.textContent = "";
+    }
+
+    function textConstant(value) {
+      return function() {
+        this.textContent = value;
+      };
+    }
+
+    function textFunction(value) {
+      return function() {
+        var v = value.apply(this, arguments);
+        this.textContent = v == null ? "" : v;
+      };
+    }
+
+    function selection_text(value) {
+      return arguments.length
+          ? this.each(value == null
+              ? textRemove : (typeof value === "function"
+              ? textFunction
+              : textConstant)(value))
+          : this.node().textContent;
+    }
+
+    function htmlRemove() {
+      this.innerHTML = "";
+    }
+
+    function htmlConstant(value) {
+      return function() {
+        this.innerHTML = value;
+      };
+    }
+
+    function htmlFunction(value) {
+      return function() {
+        var v = value.apply(this, arguments);
+        this.innerHTML = v == null ? "" : v;
+      };
+    }
+
+    function selection_html(value) {
+      return arguments.length
+          ? this.each(value == null
+              ? htmlRemove : (typeof value === "function"
+              ? htmlFunction
+              : htmlConstant)(value))
+          : this.node().innerHTML;
+    }
+
+    function raise() {
+      if (this.nextSibling) this.parentNode.appendChild(this);
+    }
+
+    function selection_raise() {
+      return this.each(raise);
+    }
+
+    function lower() {
+      if (this.previousSibling) this.parentNode.insertBefore(this, this.parentNode.firstChild);
+    }
+
+    function selection_lower() {
+      return this.each(lower);
+    }
+
+    function selection_append(name) {
+      var create = typeof name === "function" ? name : creator(name);
+      return this.select(function() {
+        return this.appendChild(create.apply(this, arguments));
+      });
+    }
+
+    function constantNull() {
+      return null;
+    }
+
+    function selection_insert(name, before) {
+      var create = typeof name === "function" ? name : creator(name),
+          select = before == null ? constantNull : typeof before === "function" ? before : selector(before);
+      return this.select(function() {
+        return this.insertBefore(create.apply(this, arguments), select.apply(this, arguments) || null);
+      });
+    }
+
+    function remove() {
+      var parent = this.parentNode;
+      if (parent) parent.removeChild(this);
+    }
+
+    function selection_remove() {
+      return this.each(remove);
+    }
+
+    function selection_cloneShallow() {
+      var clone = this.cloneNode(false), parent = this.parentNode;
+      return parent ? parent.insertBefore(clone, this.nextSibling) : clone;
+    }
+
+    function selection_cloneDeep() {
+      var clone = this.cloneNode(true), parent = this.parentNode;
+      return parent ? parent.insertBefore(clone, this.nextSibling) : clone;
+    }
+
+    function selection_clone(deep) {
+      return this.select(deep ? selection_cloneDeep : selection_cloneShallow);
+    }
+
+    function selection_datum(value) {
+      return arguments.length
+          ? this.property("__data__", value)
+          : this.node().__data__;
+    }
+
+    var filterEvents = {};
+
+    if (typeof document !== "undefined") {
+      var element$1 = document.documentElement;
+      if (!("onmouseenter" in element$1)) {
+        filterEvents = {mouseenter: "mouseover", mouseleave: "mouseout"};
+      }
+    }
+
+    function filterContextListener(listener, index, group) {
+      listener = contextListener(listener, index, group);
+      return function(event) {
+        var related = event.relatedTarget;
+        if (!related || (related !== this && !(related.compareDocumentPosition(this) & 8))) {
+          listener.call(this, event);
+        }
+      };
+    }
+
+    function contextListener(listener, index, group) {
+      return function(event1) {
+        try {
+          listener.call(this, this.__data__, index, group);
+        } finally {
+        }
+      };
+    }
+
+    function parseTypenames(typenames) {
+      return typenames.trim().split(/^|\s+/).map(function(t) {
+        var name = "", i = t.indexOf(".");
+        if (i >= 0) name = t.slice(i + 1), t = t.slice(0, i);
+        return {type: t, name: name};
+      });
+    }
+
+    function onRemove(typename) {
+      return function() {
+        var on = this.__on;
+        if (!on) return;
+        for (var j = 0, i = -1, m = on.length, o; j < m; ++j) {
+          if (o = on[j], (!typename.type || o.type === typename.type) && o.name === typename.name) {
+            this.removeEventListener(o.type, o.listener, o.capture);
+          } else {
+            on[++i] = o;
+          }
+        }
+        if (++i) on.length = i;
+        else delete this.__on;
+      };
+    }
+
+    function onAdd(typename, value, capture) {
+      var wrap = filterEvents.hasOwnProperty(typename.type) ? filterContextListener : contextListener;
+      return function(d, i, group) {
+        var on = this.__on, o, listener = wrap(value, i, group);
+        if (on) for (var j = 0, m = on.length; j < m; ++j) {
+          if ((o = on[j]).type === typename.type && o.name === typename.name) {
+            this.removeEventListener(o.type, o.listener, o.capture);
+            this.addEventListener(o.type, o.listener = listener, o.capture = capture);
+            o.value = value;
+            return;
+          }
+        }
+        this.addEventListener(typename.type, listener, capture);
+        o = {type: typename.type, name: typename.name, value: value, listener: listener, capture: capture};
+        if (!on) this.__on = [o];
+        else on.push(o);
+      };
+    }
+
+    function selection_on(typename, value, capture) {
+      var typenames = parseTypenames(typename + ""), i, n = typenames.length, t;
+
+      if (arguments.length < 2) {
+        var on = this.node().__on;
+        if (on) for (var j = 0, m = on.length, o; j < m; ++j) {
+          for (i = 0, o = on[j]; i < n; ++i) {
+            if ((t = typenames[i]).type === o.type && t.name === o.name) {
+              return o.value;
+            }
+          }
+        }
+        return;
+      }
+
+      on = value ? onAdd : onRemove;
+      if (capture == null) capture = false;
+      for (i = 0; i < n; ++i) this.each(on(typenames[i], value, capture));
+      return this;
+    }
+
+    function dispatchEvent(node, type, params) {
+      var window = defaultView(node),
+          event = window.CustomEvent;
+
+      if (typeof event === "function") {
+        event = new event(type, params);
+      } else {
+        event = window.document.createEvent("Event");
+        if (params) event.initEvent(type, params.bubbles, params.cancelable), event.detail = params.detail;
+        else event.initEvent(type, false, false);
+      }
+
+      node.dispatchEvent(event);
+    }
+
+    function dispatchConstant(type, params) {
+      return function() {
+        return dispatchEvent(this, type, params);
+      };
+    }
+
+    function dispatchFunction(type, params) {
+      return function() {
+        return dispatchEvent(this, type, params.apply(this, arguments));
+      };
+    }
+
+    function selection_dispatch(type, params) {
+      return this.each((typeof params === "function"
+          ? dispatchFunction
+          : dispatchConstant)(type, params));
+    }
+
+    var root = [null];
+
+    function Selection(groups, parents) {
+      this._groups = groups;
+      this._parents = parents;
+    }
+
+    function selection() {
+      return new Selection([[document.documentElement]], root);
+    }
+
+    Selection.prototype = selection.prototype = {
+      constructor: Selection,
+      select: selection_select,
+      selectAll: selection_selectAll,
+      filter: selection_filter,
+      data: selection_data,
+      enter: selection_enter,
+      exit: selection_exit,
+      join: selection_join,
+      merge: selection_merge,
+      order: selection_order,
+      sort: selection_sort,
+      call: selection_call,
+      nodes: selection_nodes,
+      node: selection_node,
+      size: selection_size,
+      empty: selection_empty,
+      each: selection_each,
+      attr: selection_attr,
+      style: selection_style,
+      property: selection_property,
+      classed: selection_classed,
+      text: selection_text,
+      html: selection_html,
+      raise: selection_raise,
+      lower: selection_lower,
+      append: selection_append,
+      insert: selection_insert,
+      remove: selection_remove,
+      clone: selection_clone,
+      datum: selection_datum,
+      on: selection_on,
+      dispatch: selection_dispatch
+    };
+
+    function d3select(selector) {
+      return typeof selector === "string"
+          ? new Selection([[document.querySelector(selector)]], [document.documentElement])
+          : new Selection([[selector]], root);
     }
 
     function _isPlaceholder(a) {
@@ -3255,28 +5489,489 @@ var app = (function () {
         const operations = await fetch(source)
             .then(response => response.json())
             .then(json => json.walletOperations);
-
-        const sortedAndCleaned = operations.map(clean)
-            .sort((a,b) => a.start - b.start);
-
-        const operationsByDay = byDay(sortedAndCleaned);
-        const operationsByMonths=  byMonth(Object.entries(operationsByDay));
-        return Object.entries(operationsByMonths);
+        return operations.map(clean);
     }
 
-    /* src/App.svelte generated by Svelte v3.16.7 */
-    const file$1 = "src/App.svelte";
+    function getCoursesByMonthAndDay(courses) {
+        const sorted = courses.sort((a,b) => a.start - b.start);
+        const coursesByDay = byDay(sorted);
+        const coursesByMonths = byMonth(Object.entries(coursesByDay));
+        return Object.entries(coursesByMonths);
+    }
+
+    async function buildDistancePoints(courses, total) {
+        //sorted desc
+        const sorted = courses.sort((a,b) => b.start - a.start);
+        let distance = total;
+        sorted.forEach( course => {
+            course['totalDistance'] = distance;
+            distance -= course.distance;
+        });
+        return sorted.sort((a,b) => a.start - b.start);
+    }
+
+    // Parsing des timestamps
+    const parseTs = timeParse('%Q');
+
+    function findMinMax(courses) {
+        if (!courses || courses.length === 0) {
+            return {
+                dateMin: 0,
+                dateMax: 0,
+                distanceMin: 0,
+                distanceMax: 0,
+            }
+        }
+
+        // courses is already sorted
+        const first = courses[0];
+        const last = courses[courses.length-1];
+        return {
+            dateMin: parseTs(first.start),
+            dateMax: parseTs(last.end),
+            distanceMin: first.totalDistance,
+            distanceMax: last.totalDistance,
+        };
+    }
+
+    /* src/viz/Distance.svelte generated by Svelte v3.16.7 */
+    const file$1 = "src/viz/Distance.svelte";
 
     function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[3] = list[i][0];
-    	child_ctx[4] = list[i][1];
-    	child_ctx[6] = i;
+    	child_ctx[17] = list[i].x1;
+    	child_ctx[18] = list[i].x2;
+    	child_ctx[19] = list[i].y1;
+    	child_ctx[20] = list[i].y2;
+    	child_ctx[21] = list[i].label;
     	return child_ctx;
     }
 
-    // (1:0) <script>  import Wheel from './viz/Wheel.svelte';  import {getData}
-    function create_catch_block(ctx) {
+    // (100:12) {#each eventLines as {x1, x2, y1, y2, label}}
+    function create_each_block$1(ctx) {
+    	let line;
+    	let line_x__value;
+    	let line_x__value_1;
+    	let line_y__value;
+    	let line_y__value_1;
+    	let text_1;
+    	let t_value = /*label*/ ctx[21] + "";
+    	let t;
+    	let text_1_x_value;
+    	let text_1_y_value;
+
+    	const block = {
+    		c: function create() {
+    			line = svg_element("line");
+    			text_1 = svg_element("text");
+    			t = text(t_value);
+    			attr_dev(line, "x1", line_x__value = /*x1*/ ctx[17]);
+    			attr_dev(line, "x2", line_x__value_1 = /*x2*/ ctx[18]);
+    			attr_dev(line, "y1", line_y__value = /*y1*/ ctx[19]);
+    			attr_dev(line, "y2", line_y__value_1 = /*y2*/ ctx[20]);
+    			attr_dev(line, "class", "svelte-tpm0je");
+    			add_location(line, file$1, 100, 16, 3039);
+    			attr_dev(text_1, "x", text_1_x_value = /*x1*/ ctx[17]);
+    			attr_dev(text_1, "y", text_1_y_value = /*margin*/ ctx[4].top);
+    			attr_dev(text_1, "dx", "5");
+    			attr_dev(text_1, "class", "svelte-tpm0je");
+    			add_location(text_1, file$1, 101, 16, 3089);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, line, anchor);
+    			insert_dev(target, text_1, anchor);
+    			append_dev(text_1, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*eventLines*/ 8 && line_x__value !== (line_x__value = /*x1*/ ctx[17])) {
+    				attr_dev(line, "x1", line_x__value);
+    			}
+
+    			if (dirty & /*eventLines*/ 8 && line_x__value_1 !== (line_x__value_1 = /*x2*/ ctx[18])) {
+    				attr_dev(line, "x2", line_x__value_1);
+    			}
+
+    			if (dirty & /*eventLines*/ 8 && line_y__value !== (line_y__value = /*y1*/ ctx[19])) {
+    				attr_dev(line, "y1", line_y__value);
+    			}
+
+    			if (dirty & /*eventLines*/ 8 && line_y__value_1 !== (line_y__value_1 = /*y2*/ ctx[20])) {
+    				attr_dev(line, "y2", line_y__value_1);
+    			}
+
+    			if (dirty & /*eventLines*/ 8 && t_value !== (t_value = /*label*/ ctx[21] + "")) set_data_dev(t, t_value);
+
+    			if (dirty & /*eventLines*/ 8 && text_1_x_value !== (text_1_x_value = /*x1*/ ctx[17])) {
+    				attr_dev(text_1, "x", text_1_x_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(line);
+    			if (detaching) detach_dev(text_1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$1.name,
+    		type: "each",
+    		source: "(100:12) {#each eventLines as {x1, x2, y1, y2, label}}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$1(ctx) {
+    	let div;
+    	let h3;
+    	let t1;
+    	let svg;
+    	let g0;
+    	let path_1;
+    	let g1;
+    	let g4;
+    	let g2;
+    	let g2_transform_value;
+    	let g3;
+    	let g3_transform_value;
+    	let each_value = /*eventLines*/ ctx[3];
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			h3 = element("h3");
+    			h3.textContent = "Distance totale";
+    			t1 = space();
+    			svg = svg_element("svg");
+    			g0 = svg_element("g");
+    			path_1 = svg_element("path");
+    			g1 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			g4 = svg_element("g");
+    			g2 = svg_element("g");
+    			g3 = svg_element("g");
+    			attr_dev(h3, "class", "svelte-tpm0je");
+    			add_location(h3, file$1, 93, 4, 2798);
+    			attr_dev(path_1, "d", /*path*/ ctx[2]);
+    			attr_dev(path_1, "class", "svelte-tpm0je");
+    			add_location(path_1, file$1, 96, 12, 2900);
+    			attr_dev(g0, "class", "data svelte-tpm0je");
+    			add_location(g0, file$1, 95, 8, 2871);
+    			attr_dev(g1, "class", "events svelte-tpm0je");
+    			add_location(g1, file$1, 98, 8, 2946);
+    			attr_dev(g2, "ref", "xAxis");
+    			attr_dev(g2, "transform", g2_transform_value = `translate(0, ${/*height*/ ctx[1] - /*margin*/ ctx[4].bottom})`);
+    			add_location(g2, file$1, 111, 12, 3259);
+    			attr_dev(g3, "ref", "yAxis");
+    			attr_dev(g3, "transform", g3_transform_value = `translate(${/*margin*/ ctx[4].left}, 0)`);
+    			add_location(g3, file$1, 112, 12, 3345);
+    			add_location(g4, file$1, 110, 8, 3243);
+    			attr_dev(svg, "width", /*width*/ ctx[0]);
+    			attr_dev(svg, "height", /*height*/ ctx[1]);
+    			add_location(svg, file$1, 94, 4, 2827);
+    			attr_dev(div, "class", "container svelte-tpm0je");
+    			add_location(div, file$1, 92, 0, 2770);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			append_dev(div, h3);
+    			append_dev(div, t1);
+    			append_dev(div, svg);
+    			append_dev(svg, g0);
+    			append_dev(g0, path_1);
+    			append_dev(svg, g1);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(g1, null);
+    			}
+
+    			append_dev(svg, g4);
+    			append_dev(g4, g2);
+    			append_dev(g4, g3);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*path*/ 4) {
+    				attr_dev(path_1, "d", /*path*/ ctx[2]);
+    			}
+
+    			if (dirty & /*eventLines, margin*/ 24) {
+    				each_value = /*eventLines*/ ctx[3];
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(g1, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+
+    			if (dirty & /*height*/ 2 && g2_transform_value !== (g2_transform_value = `translate(0, ${/*height*/ ctx[1] - /*margin*/ ctx[4].bottom})`)) {
+    				attr_dev(g2, "transform", g2_transform_value);
+    			}
+
+    			if (dirty & /*width*/ 1) {
+    				attr_dev(svg, "width", /*width*/ ctx[0]);
+    			}
+
+    			if (dirty & /*height*/ 2) {
+    				attr_dev(svg, "height", /*height*/ ctx[1]);
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$1($$self, $$props, $$invalidate) {
+    	let { since = "" } = $$props;
+    	let { points = [] } = $$props;
+    	let { width = 600 } = $$props;
+    	let { height = 250 } = $$props;
+
+    	let { events = [
+    		{
+    			date: new Date(2019, 11, 5),
+    			label: "Début de la grève"
+    		}
+    	] } = $$props;
+
+    	const margin = { top: 20, right: 50, bottom: 20, left: 25 };
+    	let dateMin, dateMax, distanceMin, distanceMax;
+    	const parseTs = timeParse("%Q");
+
+    	onMount(() => {
+    		setTimeout(
+    			() => {
+    				d3select("g[ref=\"xAxis\"]").call(xAxis).call(g => g.select(".domain").remove());
+    				d3select("g[ref=\"yAxis\"]").call(yAxis).call(g => g.select(".domain").remove()).call(g => g.selectAll(".tick line").attr("stroke-opacity", 0.5).attr("stroke-dasharray", "2,2")).call(g => g.selectAll(".tick text").attr("x", 4).attr("dy", -4));
+    			},
+    			50
+    		);
+    	});
+
+    	const writable_props = ["since", "points", "width", "height", "events"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Distance> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$set = $$props => {
+    		if ("since" in $$props) $$invalidate(5, since = $$props.since);
+    		if ("points" in $$props) $$invalidate(6, points = $$props.points);
+    		if ("width" in $$props) $$invalidate(0, width = $$props.width);
+    		if ("height" in $$props) $$invalidate(1, height = $$props.height);
+    		if ("events" in $$props) $$invalidate(7, events = $$props.events);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {
+    			since,
+    			points,
+    			width,
+    			height,
+    			events,
+    			dateMin,
+    			dateMax,
+    			distanceMin,
+    			distanceMax,
+    			xScale,
+    			yScale,
+    			xAxis,
+    			yAxis,
+    			path,
+    			eventLines
+    		};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("since" in $$props) $$invalidate(5, since = $$props.since);
+    		if ("points" in $$props) $$invalidate(6, points = $$props.points);
+    		if ("width" in $$props) $$invalidate(0, width = $$props.width);
+    		if ("height" in $$props) $$invalidate(1, height = $$props.height);
+    		if ("events" in $$props) $$invalidate(7, events = $$props.events);
+    		if ("dateMin" in $$props) $$invalidate(8, dateMin = $$props.dateMin);
+    		if ("dateMax" in $$props) $$invalidate(9, dateMax = $$props.dateMax);
+    		if ("distanceMin" in $$props) $$invalidate(10, distanceMin = $$props.distanceMin);
+    		if ("distanceMax" in $$props) $$invalidate(11, distanceMax = $$props.distanceMax);
+    		if ("xScale" in $$props) $$invalidate(12, xScale = $$props.xScale);
+    		if ("yScale" in $$props) $$invalidate(13, yScale = $$props.yScale);
+    		if ("xAxis" in $$props) xAxis = $$props.xAxis;
+    		if ("yAxis" in $$props) yAxis = $$props.yAxis;
+    		if ("path" in $$props) $$invalidate(2, path = $$props.path);
+    		if ("eventLines" in $$props) $$invalidate(3, eventLines = $$props.eventLines);
+    	};
+
+    	let xScale;
+    	let yScale;
+    	let xAxis;
+    	let yAxis;
+    	let path;
+    	let eventLines;
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*points*/ 64) {
+    			 {
+    				const minMax = findMinMax(points);
+    				$$invalidate(8, dateMin = minMax.dateMin);
+    				$$invalidate(9, dateMax = minMax.dateMax);
+    				$$invalidate(10, distanceMin = minMax.distanceMin);
+    				$$invalidate(11, distanceMax = minMax.distanceMax);
+    			}
+    		}
+
+    		if ($$self.$$.dirty & /*dateMin, dateMax, width*/ 769) {
+    			 $$invalidate(12, xScale = scaleTime().domain([dateMin, dateMax]).range([margin.left, width - margin.right]));
+    		}
+
+    		if ($$self.$$.dirty & /*distanceMin, distanceMax, height*/ 3074) {
+    			 $$invalidate(13, yScale = linear$1().domain([distanceMin, distanceMax]).range([height - margin.bottom, margin.top]));
+    		}
+
+    		if ($$self.$$.dirty & /*xScale*/ 4096) {
+    			 xAxis = axisBottom().scale(xScale).ticks(6).tickFormat(timeFormat("%d/%m"));
+    		}
+
+    		if ($$self.$$.dirty & /*yScale, width*/ 8193) {
+    			 yAxis = axisRight().scale(yScale).tickSize(width - margin.left - margin.right).tickFormat(function (d) {
+    				return this.parentNode.nextSibling ? d : `${d} km`;
+    			});
+    		}
+
+    		if ($$self.$$.dirty & /*xScale, yScale, points*/ 12352) {
+    			 $$invalidate(2, path = d3line().curve(stepAfter).x(d => xScale(parseTs(d.start))).y(d => yScale(d.totalDistance))(points));
+    		}
+
+    		if ($$self.$$.dirty & /*events, xScale, height*/ 4226) {
+    			 $$invalidate(3, eventLines = events.map(event => {
+    				const x = xScale(event.date);
+
+    				return {
+    					label: event.label,
+    					x1: x,
+    					x2: x,
+    					y1: margin.top,
+    					y2: height - margin.bottom
+    				};
+    			}));
+    		}
+    	};
+
+    	return [width, height, path, eventLines, margin, since, points, events];
+    }
+
+    class Distance extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, {
+    			since: 5,
+    			points: 6,
+    			width: 0,
+    			height: 1,
+    			events: 7
+    		});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Distance",
+    			options,
+    			id: create_fragment$1.name
+    		});
+    	}
+
+    	get since() {
+    		throw new Error("<Distance>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set since(value) {
+    		throw new Error("<Distance>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get points() {
+    		throw new Error("<Distance>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set points(value) {
+    		throw new Error("<Distance>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get width() {
+    		throw new Error("<Distance>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set width(value) {
+    		throw new Error("<Distance>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get height() {
+    		throw new Error("<Distance>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set height(value) {
+    		throw new Error("<Distance>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get events() {
+    		throw new Error("<Distance>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set events(value) {
+    		throw new Error("<Distance>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/App.svelte generated by Svelte v3.16.7 */
+    const file$2 = "src/App.svelte";
+
+    function get_each_context$2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[6] = list[i][0];
+    	child_ctx[7] = list[i][1];
+    	child_ctx[9] = i;
+    	return child_ctx;
+    }
+
+    // (1:0) <script>     import Wheel from './viz/Wheel.svelte';     import Distance from './viz/Distance.svelte';     import {getData}
+    function create_catch_block_1(ctx) {
     	const block = {
     		c: noop,
     		m: noop,
@@ -3288,24 +5983,24 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block.name,
+    		id: create_catch_block_1.name,
     		type: "catch",
-    		source: "(1:0) <script>  import Wheel from './viz/Wheel.svelte';  import {getData}",
+    		source: "(1:0) <script>     import Wheel from './viz/Wheel.svelte';     import Distance from './viz/Distance.svelte';     import {getData}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (14:1) {:then data}
-    function create_then_block(ctx) {
+    // (25:8) {:then  coursesByMonth}
+    function create_then_block_1(ctx) {
     	let each_1_anchor;
     	let current;
-    	let each_value = /*data*/ ctx[2];
+    	let each_value = /*coursesByMonth*/ ctx[5];
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
     	}
 
     	const out = i => transition_out(each_blocks[i], 1, 1, () => {
@@ -3329,18 +6024,18 @@ var app = (function () {
     			current = true;
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*promise*/ 1) {
-    				each_value = /*data*/ ctx[2];
+    			if (dirty & /*coursesByMonthPromise*/ 1) {
+    				each_value = /*coursesByMonth*/ ctx[5];
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$1(ctx, each_value, i);
+    					const child_ctx = get_each_context$2(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     						transition_in(each_blocks[i], 1);
     					} else {
-    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i] = create_each_block$2(child_ctx);
     						each_blocks[i].c();
     						transition_in(each_blocks[i], 1);
     						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
@@ -3382,23 +6077,23 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block.name,
+    		id: create_then_block_1.name,
     		type: "then",
-    		source: "(14:1) {:then data}",
+    		source: "(25:8) {:then  coursesByMonth}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (15:2) {#each data as [month, courses], i}
-    function create_each_block$1(ctx) {
+    // (26:12) {#each coursesByMonth as [month, courses], i}
+    function create_each_block$2(ctx) {
     	let current;
 
     	const wheel = new Wheel({
     			props: {
-    				month: /*month*/ ctx[3],
-    				data: /*courses*/ ctx[4],
+    				month: /*month*/ ctx[6],
+    				data: /*courses*/ ctx[7],
     				maxDistance: "38",
     				width: "350"
     			},
@@ -3413,7 +6108,12 @@ var app = (function () {
     			mount_component(wheel, target, anchor);
     			current = true;
     		},
-    		p: noop,
+    		p: function update(ctx, dirty) {
+    			const wheel_changes = {};
+    			if (dirty & /*coursesByMonthPromise*/ 1) wheel_changes.month = /*month*/ ctx[6];
+    			if (dirty & /*coursesByMonthPromise*/ 1) wheel_changes.data = /*courses*/ ctx[7];
+    			wheel.$set(wheel_changes);
+    		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(wheel.$$.fragment, local);
@@ -3430,16 +6130,141 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$1.name,
+    		id: create_each_block$2.name,
     		type: "each",
-    		source: "(15:2) {#each data as [month, courses], i}",
+    		source: "(26:12) {#each coursesByMonth as [month, courses], i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (12:17)   ...loading...  {:then data}
+    // (23:38)              ...loading...         {:then  coursesByMonth}
+    function create_pending_block_1(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("...loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_1.name,
+    		type: "pending",
+    		source: "(23:38)              ...loading...         {:then  coursesByMonth}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (1:0) <script>     import Wheel from './viz/Wheel.svelte';     import Distance from './viz/Distance.svelte';     import {getData}
+    function create_catch_block(ctx) {
+    	const block = {
+    		c: noop,
+    		m: noop,
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: noop
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block.name,
+    		type: "catch",
+    		source: "(1:0) <script>     import Wheel from './viz/Wheel.svelte';     import Distance from './viz/Distance.svelte';     import {getData}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (39:8) {:then points}
+    function create_then_block(ctx) {
+    	let current;
+
+    	const distance = new Distance({
+    			props: {
+    				points: /*points*/ ctx[4],
+    				height: "300",
+    				width: "700",
+    				$$slots: { default: [create_default_slot] },
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			create_component(distance.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(distance, target, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const distance_changes = {};
+    			if (dirty & /*distancePoints*/ 2) distance_changes.points = /*points*/ ctx[4];
+
+    			if (dirty & /*$$scope*/ 1024) {
+    				distance_changes.$$scope = { dirty, ctx };
+    			}
+
+    			distance.$set(distance_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(distance.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(distance.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(distance, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block.name,
+    		type: "then",
+    		source: "(39:8) {:then points}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (40:3) <Distance {points} height="300" width="700">
+    function create_default_slot(ctx) {
+    	const block = { c: noop, m: noop, d: noop };
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot.name,
+    		type: "slot",
+    		source: "(40:3) <Distance {points} height=\\\"300\\\" width=\\\"700\\\">",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (37:31)     ...loading...         {:then points}
     function create_pending_block(ctx) {
     	let t;
 
@@ -3462,18 +6287,22 @@ var app = (function () {
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(12:17)   ...loading...  {:then data}",
+    		source: "(37:31)     ...loading...         {:then points}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$1(ctx) {
+    function create_fragment$2(ctx) {
     	let main;
     	let h1;
     	let t1;
-    	let div;
+    	let div2;
+    	let div0;
+    	let promise;
+    	let t2;
+    	let div1;
     	let promise_1;
     	let current;
 
@@ -3481,14 +6310,27 @@ var app = (function () {
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block,
-    		then: create_then_block,
-    		catch: create_catch_block,
-    		value: 2,
+    		pending: create_pending_block_1,
+    		then: create_then_block_1,
+    		catch: create_catch_block_1,
+    		value: 5,
     		blocks: [,,,]
     	};
 
-    	handle_promise(promise_1 = /*promise*/ ctx[0], info);
+    	handle_promise(promise = /*coursesByMonthPromise*/ ctx[0], info);
+
+    	let info_1 = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block,
+    		then: create_then_block,
+    		catch: create_catch_block,
+    		value: 4,
+    		blocks: [,,,]
+    	};
+
+    	handle_promise(promise_1 = /*distancePoints*/ ctx[1], info_1);
 
     	const block = {
     		c: function create() {
@@ -3496,12 +6338,22 @@ var app = (function () {
     			h1 = element("h1");
     			h1.textContent = "Stats Vélib";
     			t1 = space();
-    			div = element("div");
+    			div2 = element("div");
+    			div0 = element("div");
     			info.block.c();
-    			add_location(h1, file$1, 9, 1, 174);
-    			attr_dev(div, "class", "container svelte-1a6254a");
-    			add_location(div, file$1, 10, 1, 196);
-    			add_location(main, file$1, 8, 0, 166);
+    			t2 = space();
+    			div1 = element("div");
+    			info_1.block.c();
+    			attr_dev(h1, "class", "svelte-dap1sv");
+    			add_location(h1, file$2, 19, 4, 557);
+    			attr_dev(div0, "class", "wheels svelte-dap1sv");
+    			add_location(div0, file$2, 21, 2, 608);
+    			attr_dev(div1, "class", "distance svelte-dap1sv");
+    			add_location(div1, file$2, 35, 2, 1003);
+    			attr_dev(div2, "class", "container svelte-dap1sv");
+    			add_location(div2, file$2, 20, 4, 582);
+    			attr_dev(main, "class", "svelte-dap1sv");
+    			add_location(main, file$2, 18, 0, 546);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3510,29 +6362,50 @@ var app = (function () {
     			insert_dev(target, main, anchor);
     			append_dev(main, h1);
     			append_dev(main, t1);
-    			append_dev(main, div);
-    			info.block.m(div, info.anchor = null);
-    			info.mount = () => div;
+    			append_dev(main, div2);
+    			append_dev(div2, div0);
+    			info.block.m(div0, info.anchor = null);
+    			info.mount = () => div0;
     			info.anchor = null;
+    			append_dev(div2, t2);
+    			append_dev(div2, div1);
+    			info_1.block.m(div1, info_1.anchor = null);
+    			info_1.mount = () => div1;
+    			info_1.anchor = null;
     			current = true;
     		},
     		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
+    			info.ctx = ctx;
 
-    			{
+    			if (dirty & /*coursesByMonthPromise*/ 1 && promise !== (promise = /*coursesByMonthPromise*/ ctx[0]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[2] = info.resolved;
+    				child_ctx[5] = info.resolved;
     				info.block.p(child_ctx, dirty);
+    			}
+
+    			info_1.ctx = ctx;
+
+    			if (dirty & /*distancePoints*/ 2 && promise_1 !== (promise_1 = /*distancePoints*/ ctx[1]) && handle_promise(promise_1, info_1)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[4] = info_1.resolved;
+    				info_1.block.p(child_ctx, dirty);
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(info.block);
+    			transition_in(info_1.block);
     			current = true;
     		},
     		o: function outro(local) {
     			for (let i = 0; i < 3; i += 1) {
     				const block = info.blocks[i];
+    				transition_out(block);
+    			}
+
+    			for (let i = 0; i < 3; i += 1) {
+    				const block = info_1.blocks[i];
     				transition_out(block);
     			}
 
@@ -3543,12 +6416,15 @@ var app = (function () {
     			info.block.d();
     			info.token = null;
     			info = null;
+    			info_1.block.d();
+    			info_1.token = null;
+    			info_1 = null;
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$1.name,
+    		id: create_fragment$2.name,
     		type: "component",
     		source: "",
     		ctx
@@ -3557,9 +6433,11 @@ var app = (function () {
     	return block;
     }
 
-    function instance$1($$self, $$props, $$invalidate) {
+    function instance$2($$self, $$props, $$invalidate) {
     	let { source = "" } = $$props;
-    	const promise = getData(source);
+    	let allCourses = [];
+    	let coursesByMonthPromise;
+    	let distancePoints;
     	const writable_props = ["source"];
 
     	Object.keys($$props).forEach(key => {
@@ -3567,30 +6445,52 @@ var app = (function () {
     	});
 
     	$$self.$set = $$props => {
-    		if ("source" in $$props) $$invalidate(1, source = $$props.source);
+    		if ("source" in $$props) $$invalidate(2, source = $$props.source);
     	};
 
     	$$self.$capture_state = () => {
-    		return { source };
+    		return {
+    			source,
+    			allCourses,
+    			coursesByMonthPromise,
+    			distancePoints
+    		};
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("source" in $$props) $$invalidate(1, source = $$props.source);
+    		if ("source" in $$props) $$invalidate(2, source = $$props.source);
+    		if ("allCourses" in $$props) $$invalidate(3, allCourses = $$props.allCourses);
+    		if ("coursesByMonthPromise" in $$props) $$invalidate(0, coursesByMonthPromise = $$props.coursesByMonthPromise);
+    		if ("distancePoints" in $$props) $$invalidate(1, distancePoints = $$props.distancePoints);
     	};
 
-    	return [promise, source];
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*source*/ 4) {
+    			 (async () => $$invalidate(3, allCourses = await getData(source)))();
+    		}
+
+    		if ($$self.$$.dirty & /*allCourses*/ 8) {
+    			 $$invalidate(0, coursesByMonthPromise = getCoursesByMonthAndDay(allCourses));
+    		}
+
+    		if ($$self.$$.dirty & /*allCourses*/ 8) {
+    			 $$invalidate(1, distancePoints = buildDistancePoints(allCourses, 965.1));
+    		}
+    	};
+
+    	return [coursesByMonthPromise, distancePoints, source];
     }
 
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { source: 1 });
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, { source: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$1.name
+    			id: create_fragment$2.name
     		});
     	}
 

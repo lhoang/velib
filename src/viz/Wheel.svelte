@@ -90,14 +90,13 @@
     .container {
         width: min-content;
         width: -moz-min-content;
-        width: -webkit-min-content;
     }
     text {
         font-family: 'Nunito', sans-serif;
     }
     .data path {
-        stroke: #8fb8bf;
-        fill: #a3d2da;
+        stroke: var(--velib-blue-dark);
+        fill: var(--velib-blue);
     }
 
     .title text {
@@ -111,11 +110,12 @@
         fill: none;
         stroke: lightgray;
         stroke-width: 1px;
-        stroke-dasharray: 5 2;
+        stroke-dasharray: 5,2;
     }
     .levels circle {
         fill: none;
-        stroke: rgba(128, 184, 92, 0.52);
+        stroke: var(--velib-green);
+        stroke-opacity: .52;
         stroke-width: 1px;
         stroke-dasharray: 5;
     }
