@@ -27,14 +27,29 @@
     $: slices = data.map( d => {
         const [day, courses] = d;
         const dayOfMonth = +day.substring(8)-1;
-        const distance = courses.reduce( (acc, elt) => acc + elt.distance, 0);
-        const shape = d3arc()
+        const totalDistance = courses.reduce( (acc, elt) => acc + elt.distance, 0);
+        const outerShape = d3arc()
                 .startAngle(dayAngle * dayOfMonth)
                 .endAngle(dayAngle * (dayOfMonth + 1))
-                .innerRadius(donutOffset)
-                .outerRadius(radiusScale(distance))();
+                .innerRadius(radiusScale(0))
+                .outerRadius(radiusScale(totalDistance))();
 
-        return {shape};
+        let currentDistance = 0;
+        const innerShapes = courses.map( course => {
+            const offset = course.isFaulty ? Math.PI / 360 : 0;
+
+            const shape = d3arc()
+                    .startAngle(dayAngle * dayOfMonth + offset)
+                    .endAngle(dayAngle * (dayOfMonth + 1) - offset)
+                    .innerRadius(radiusScale(currentDistance))
+                    .outerRadius(radiusScale(currentDistance + course.distance))();
+            currentDistance += course.distance;
+            const type = course.type;
+            const faulty = course.isFaulty ? 'faulty' : '';
+            return {shape, course};
+        });
+
+        return {outerShape, innerShapes};
     });
 
     const weeks = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30'];
@@ -56,14 +71,9 @@
 <div class="container">
     <svg width={width} height={width}>
         <g transform="translate({width/2}, {width/2})">
-            <g class="data">
-                {#each slices as {shape}}
-                    <path d="{shape}"></path>
-                {/each}
-            </g>
             <g class="title">
-                <text x="0" y="0" dy="-5">{displayMonth}</text>
-                <text x="0" y="20" dy="-5">{displayYear}</text>
+                <text x="0" y="0" dy="-8">{displayMonth}</text>
+                <text x="0" y="25" dy="-8">{displayYear}</text>
             </g>
             <g class="weeks">
                 {#each weekSlices as {shape, name}, i}
@@ -73,6 +83,18 @@
                             {name}
                         </textPath>
                     </text>
+                {/each}
+            </g>
+            <g class="data">
+                {#each slices as {outerShape, innerShapes}}
+                    <path d="{outerShape}" class="outer"></path>
+                    {#each innerShapes as {shape, course}}
+                        <path d="{shape}"
+                              class="inner {course.type} {course.isFaulty ? 'faulty' : ''}"
+                              data-bikeid={course.bikeId}
+                        >
+                        </path>
+                    {/each}
                 {/each}
             </g>
             <g class="levels">
@@ -94,10 +116,33 @@
     text {
         font-family: 'Nunito', sans-serif;
     }
-    .data path {
-        stroke: var(--velib-blue-dark);
+    .mecanical {
+        fill: var(--velib-green);
+    }
+
+    .electrical {
         fill: var(--velib-blue);
     }
+
+    .faulty {
+        stroke: darkred;
+        stroke-width: 4px;
+        fill: darkred;
+    }
+
+    .data path.outer {
+        stroke: var(--velib-blue-dark);
+        fill: none;
+    }
+    .data path.inner {
+        stroke: #666;
+    }
+    .data path.inner.faulty {
+        stroke: darkred;
+        stroke-width: 3px;
+        fill: darkred;
+    }
+
 
     .title text {
         fill: #333333;
@@ -120,8 +165,8 @@
         stroke-dasharray: 5;
     }
     .levels text {
-        fill: #999999;
-        stroke: #999999;
+        fill: #737373;
+        stroke: #737373;
         font-size: .8rem;
     }
 </style>
