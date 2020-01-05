@@ -55,7 +55,9 @@ export async function getData(source) {
 export function getCoursesByMonthAndDay(courses) {
     const coursesByDay = byDay(courses);
     const coursesByMonths = byMonth(Object.entries(coursesByDay));
-    return Object.entries(coursesByMonths);
+    const res = Object.entries(coursesByMonths);
+    // get the last 2 months only for now
+    return res.slice(Math.max(res.length - 2, 1))
 }
 
 export async function buildDistancePoints(courses, total) {

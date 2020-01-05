@@ -1,6 +1,7 @@
 <script>
     import Wheel from './viz/Wheel.svelte';
     import Distance from './viz/Distance.svelte';
+    import Details from './viz/Details.svelte';
     import {getData} from './velib.service.js';
     import {buildDistancePoints, getCoursesByMonthAndDay} from "./velib.service";
 
@@ -14,11 +15,15 @@
 
 
     $: distancePoints = buildDistancePoints(allCourses, 965.1);
+
 </script>
 
 <main>
     <h1>Stats Vélib</h1>
     <div class="container">
+        <div class="details">
+            <Details></Details>
+        </div>
 		<div class="wheels">
         {#await coursesByMonthPromise}
             ...loading...
@@ -52,6 +57,7 @@
 		--velib-blue-dark: #8fb8bf;
 		--velib-green: #80b85c;
 		--velib-green-dark: #6a9c4e;
+        --faulty: #b86575;
 	}
 
 	h1, h2, h3, text {

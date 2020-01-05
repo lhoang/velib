@@ -2,6 +2,7 @@
     import {scaleLinear} from 'd3-scale';
     import {arc as d3arc} from 'd3-shape';
     import {getMonthStr} from "../date.utils";
+    import {detail} from '../velib.store';
 
     export let month = '';
     // format : Array<['20191231', Array<Course>]>
@@ -44,8 +45,6 @@
                     .innerRadius(radiusScale(currentDistance))
                     .outerRadius(radiusScale(currentDistance + course.distance))();
             currentDistance += course.distance;
-            const type = course.type;
-            const faulty = course.isFaulty ? 'faulty' : '';
             return {shape, course};
         });
 
@@ -65,6 +64,10 @@
         return {shape, name: d};
 
     });
+
+    const displayDetails = (index) => {
+        detail.set(data[index]);
+    }
 
 </script>
 
@@ -86,8 +89,8 @@
                 {/each}
             </g>
             <g class="data">
-                {#each slices as {outerShape, innerShapes}}
-                    <path d="{outerShape}" class="outer"></path>
+                {#each slices as {outerShape, innerShapes}, index}
+                    <g class="slice" on:click={() => displayDetails(index)}>
                     {#each innerShapes as {shape, course}}
                         <path d="{shape}"
                               class="inner {course.type} {course.isFaulty ? 'faulty' : ''}"
@@ -95,6 +98,8 @@
                         >
                         </path>
                     {/each}
+                    <path d="{outerShape}" class="outer"></path>
+                    </g>
                 {/each}
             </g>
             <g class="levels">
@@ -125,23 +130,34 @@
     }
 
     .faulty {
-        stroke: darkred;
+        stroke: var(--faulty);
         stroke-width: 4px;
-        fill: darkred;
+        fill: var(--faulty);
     }
 
     .data path.outer {
         stroke: var(--velib-blue-dark);
-        fill: none;
+        fill: transparent;
     }
+
+    .slice:hover {
+        transform: scale(1.2);
+        cursor: help;
+    }
+    .slice:hover path.outer {
+        stroke-width: 3px;
+        stroke: #333333;
+    }
+
     .data path.inner {
         stroke: #666;
     }
     .data path.inner.faulty {
-        stroke: darkred;
+        stroke: var(--faulty);
         stroke-width: 3px;
-        fill: darkred;
+        fill: var(--faulty);
     }
+
 
 
     .title text {

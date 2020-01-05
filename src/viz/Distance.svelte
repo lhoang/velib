@@ -7,7 +7,6 @@
     import {findMinMax} from "../velib.service";
     import {onMount} from 'svelte';
 
-    export let since = '';
     export let points = [];
     export let width = 600;
     export let height = 250;
@@ -137,7 +136,7 @@
     }
 
     g.events line {
-        stroke: darkred;
+        stroke: var(--faulty);
         stroke-width: 2px;
     }
     g.events text {
