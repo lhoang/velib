@@ -22,12 +22,12 @@ const byDay = groupBy(course => course.day);
 const byMonth = groupBy(([day,]) => day.substring(0, 7));
 
 /**
- * A bike can be considered faulty if i took another bike within the threshold time (2min)
+ * A bike can be considered faulty if i took another bike within the threshold time (5min)
  * or if the duration is < 60.
  */
 const tagFaulty = (sources) => {
     // Threshold in ms
-    const thresholdSwitch = 120 * 1000;
+    const thresholdSwitch = 5 * 60 * 1000;
     // Duration in s
     const thresholdDuration = 15 * 60;
     const minDuration = 60;
@@ -42,14 +42,18 @@ const tagFaulty = (sources) => {
     }
 };
 
-export async function getData(source) {
-    const operations = await fetch(source)
-        .then(response => response.json())
-        .then(json => json.walletOperations);
+export function cleanAndSort(operations) {
     const cleanedAndsorted = operations.map(clean)
         .sort((a, b) => a.start - b.start);
     tagFaulty(cleanedAndsorted);
     return cleanedAndsorted;
+}
+
+export async function getData(source) {
+    const operations = await fetch(source)
+        .then(response => response.json())
+        .then(json => json.walletOperations);
+    return cleanAndSort(operations);
 }
 
 export function getCoursesByMonthAndDay(courses) {
@@ -60,7 +64,7 @@ export function getCoursesByMonthAndDay(courses) {
     return res.slice(Math.max(res.length - 2, 1))
 }
 
-export async function buildDistancePoints(courses, total) {
+export function buildDistancePoints(courses, total) {
     //sorted desc
     const sorted = courses.sort((a, b) => b.start - a.start);
     let distance = total;
