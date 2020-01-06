@@ -6,6 +6,7 @@
     import {line as d3line, curveStepAfter} from 'd3-shape';
     import {findMinMax} from "../velib.service";
     import {onMount} from 'svelte';
+    import { afterUpdate } from 'svelte';
 
     export let points = [];
     export let width = 600;
@@ -69,23 +70,28 @@
     });
 
 
+    function setAxis() {
+        // Génération des axes
+        d3select('g[ref="xAxis"]').call(xAxis)
+                .call(g => g.select(".domain")
+                        .remove());
+        d3select('g[ref="yAxis"]').call(yAxis)
+                .call(g => g.select(".domain")
+                        .remove())
+                .call(g => g.selectAll(".tick line")
+                        .attr("stroke-opacity", 0.5)
+                        .attr("stroke-dasharray", "2,2"))
+                .call(g => g.selectAll(".tick text")
+                        .attr("x", 4)
+                        .attr("dy", -4));
+    }
+
     onMount(() => {
         setTimeout(() => {
-            // Génération des axes
-            d3select('g[ref="xAxis"]').call(xAxis)
-                    .call(g => g.select(".domain")
-                            .remove());
-            d3select('g[ref="yAxis"]').call(yAxis)
-                    .call(g => g.select(".domain")
-                            .remove())
-                    .call(g => g.selectAll(".tick line")
-                            .attr("stroke-opacity", 0.5)
-                            .attr("stroke-dasharray", "2,2"))
-                    .call(g => g.selectAll(".tick text")
-                            .attr("x", 4)
-                            .attr("dy", -4));
+            setAxis();
         }, 50);
     });
+    afterUpdate(() => setAxis());
 
 </script>
 

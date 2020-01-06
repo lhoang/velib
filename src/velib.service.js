@@ -67,7 +67,7 @@ export function getCoursesByMonthAndDay(courses) {
 export function buildDistancePoints(courses, total) {
     //sorted desc
     const sorted = courses.sort((a, b) => b.start - a.start);
-    let distance = total;
+    let distance = +total;
     sorted.forEach(course => {
         course['totalDistance'] = distance;
         distance -= course.distance;

@@ -22,7 +22,6 @@
     $: coursesByMonth = getCoursesByMonthAndDay(allCourses);
     $: distancePoints = buildDistancePoints(allCourses, totalDistance);
 
-
     const updateData = () => {
         if (input) {
             try {
@@ -90,7 +89,7 @@
             ></textarea>
         </div>
         <div class="input-distance">
-            <label for="totalDistance">Distance totale :</label>
+            <label for="totalDistance">Distance totale : </label>
             <input type="text" bind:value={totalDistance} size="4"/>km
         </div>
         <div class="explanations">
