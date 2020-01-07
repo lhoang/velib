@@ -86,12 +86,12 @@
 
     <div class="sidebar" class:hide={!showSidebar}>
         <div class="header">
-            <div class="close-btn" on:click={close}>⭾</div>
+            <div class="close-btn" on:click={close}>×</div>
             <h3>Données & explications</h3>
         </div>
         <div class="input">
             <label for="inputData">Données JSON :
-                <button class="update-btn" on:click={updateData}>🔄</button>
+                <button class="update-btn" on:click={updateData}>🔄 Rafraîchir</button>
             </label>
             {#if errorMsg}
                 <div class="error">{errorMsg}</div>
@@ -219,6 +219,9 @@
         display: flex;
         flex-direction: row;
     }
+    input[type=range] {
+        height: 1.1rem;
+    }
 
     .update-btn {
         padding: .5rem;
@@ -240,6 +243,7 @@
     .wheels {
         display: flex;
         flex-direction: row;
+        flex-wrap: wrap;
     }
 
     .explanations {

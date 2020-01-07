@@ -4,13 +4,20 @@ import {timeParse} from 'd3-time-format';
 
 
 const clean = (operation) => {
-    const duration = (operation.endDate - operation.startDate) / 1000;
+    let start = operation.startDate;
+    let end = operation.endDate;
+    if (!start || !end) {
+        start = operation.operationDate;
+        end = operation.operationDate;
+    }
+    const duration = (end - start) / 1000;
     const day = getDay(operation.startDate);
+
     return ({
         day,
         bikeId: operation.parameter3.BIKEID,
-        start: operation.startDate,
-        end: operation.endDate,
+        start,
+        end,
         duration,
         distance: +operation.parameter3.DISTANCE / 1000,
         co2: +operation.parameter3.SAVED_CARBON_DIOXIDE,
@@ -59,7 +66,8 @@ export async function getData(source) {
 export function getCoursesByMonthAndDay(courses, nbWheels) {
     const coursesByDay = byDay(courses);
     const coursesByMonths = byMonth(Object.entries(coursesByDay));
-    const res = Object.entries(coursesByMonths);
+    const res = Object.entries(coursesByMonths)
+        .sort((a, b) => a[0].localeCompare(b[0]));
     // get the last 2 months only for now
     return res.slice(Math.max(res.length - nbWheels, 1))
 }
@@ -83,7 +91,6 @@ export function findMaxDistanceForWheels(allCourses) {
     const  totalDistances = Object.entries(coursesByDay).map(([, courses]) => {
         return courses.reduce((acc, elt) => acc + elt.distance, 0);
     });
-    console.log({totalDistances});
     return totalDistances.reduce( (a, b) => Math.max(a, b), 10);
 }
 

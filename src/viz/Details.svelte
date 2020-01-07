@@ -31,11 +31,16 @@
         });
         return [res, acc];
     };
+    const formatDay = (dayStr) => {
+        const dayArr = dayStr.split('-');
+        return `${dayArr[2]}/${dayArr[1]}/${dayArr[0]}`;
+    };
 
     $: {
         const res = $detail;
         if (res.length > 0) {
-            [day, courses] = res;
+            courses = res[1];
+            day = formatDay(res[0]);
             [displayCourses, maxDistance] = addCoords(courses);
         } else {
             courses = [];
@@ -54,7 +59,7 @@
         </div>
         <div class="part1">
             <div>
-            <span class="label">Date : </span>{day}
+                <span class="label">Date : </span>{day}
             </div>
             <div class="legend">
                 <span class="mecanical">Mécanique</span>
@@ -166,6 +171,6 @@
         right: -10px;
         text-decoration: none;
         text-shadow: 0 1px 0 #fff;
-        cursor:pointer;
+        cursor: pointer;
     }
 </style>
