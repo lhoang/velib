@@ -12,10 +12,9 @@
 
     const margin = {top: 20, right: 20, bottom: 20, left: 25};
     const donutOffset = width/8;
-    const levels =[0, 10, 20, 30, 40, 50]
-                .filter(d => d <= maxDistance);
+    $: levels = [0, 1, 2, 3].map( v => Math.ceil(v * maxDistance/4));
 
-    const [displayMonth, displayYear] = getMonthStr(month);
+    $: [displayMonth, displayYear] = getMonthStr(month);
 
 
 

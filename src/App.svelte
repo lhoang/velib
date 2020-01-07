@@ -3,23 +3,32 @@
     import Distance from './viz/Distance.svelte';
     import Details from './viz/Details.svelte';
     import {getData} from './velib.service.js';
-    import {buildDistancePoints, cleanAndSort, getCoursesByMonthAndDay} from "./velib.service";
+    import {
+        buildDistancePoints,
+        cleanAndSort,
+        findMaxDistanceForWheels,
+        getCoursesByMonthAndDay
+    } from "./velib.service";
 
     export let source = '';
     let allCourses = [];
     let coursesByMonth = [];
     let distancePoints = [];
-    let totalDistance = 965.1;
+    let totalDistance = 1018.3;
+    let nbWheels = 2;
     let showGetDataExpl = false;
     let showWhere = false;
     let showHow = false;
+    let showSidebar = true;
 
     let input = '';
     let errorMsg = undefined;
 
     $:(async () => getData(source).then(result => allCourses = result))();
 
-    $: coursesByMonth = getCoursesByMonthAndDay(allCourses);
+    $: coursesByMonth = getCoursesByMonthAndDay(allCourses, nbWheels);
+    $: maxDistance = findMaxDistanceForWheels(allCourses) * 1.2;
+
     $: distancePoints = buildDistancePoints(allCourses, totalDistance);
 
     const updateData = () => {
@@ -39,6 +48,7 @@
     const toggleData = () => showGetDataExpl = !showGetDataExpl;
     const toggleWhere = () => showWhere = !showWhere;
     const toggleHow = () => showHow = !showHow;
+    const close = () => showSidebar = !showSidebar;
 
 </script>
 
@@ -56,7 +66,7 @@
                 {#each coursesByMonth as [month, courses], i}
                     <Wheel {month}
                            data={courses}
-                           maxDistance="38"
+                           {maxDistance}
                            width="350"
                     ></Wheel>
                 {/each}
@@ -74,7 +84,11 @@
 
     </div>
 
-    <div class="sidebar">
+    <div class="sidebar" class:hide={!showSidebar}>
+        <div class="header">
+            <div class="close-btn" on:click={close}>⭾</div>
+            <h3>Données & explications</h3>
+        </div>
         <div class="input">
             <label for="inputData">Données JSON :
                 <button class="update-btn" on:click={updateData}>🔄</button>
@@ -83,18 +97,22 @@
                 <div class="error">{errorMsg}</div>
             {/if}
             <textarea id="inputData" name="data"
-                      rows="3" cols="33"
+                      rows="3" cols="30"
                       bind:value={input}
                       placeholder="Copier-coller ici les données JSON Vélib"
             ></textarea>
         </div>
         <div class="input-distance">
-            <label for="totalDistance">Distance totale : </label>
+            <label for="totalDistance">Distance totale :&nbsp; </label>
             <input type="text" bind:value={totalDistance} size="4"/>km
+        </div>
+        <div class="input-nb-wheels">
+            <label for="totalDistance">Nombre de roues: </label>
+            <input type="range" bind:value={nbWheels}  min="1" max="6"/>
         </div>
         <div class="explanations">
             <h4>Comment récupérer ses données
-                <span on:click={toggleData}>{showGetDataExpl ? '🔼': '🔽'}</span>
+                <span class="expand-btn" on:click={toggleData}>{showGetDataExpl ? '🔼': '🔽'}</span>
             </h4>
             {#if showGetDataExpl}
                 <ol>
@@ -120,7 +138,7 @@
             {/if}
             <h4>
                 Où transitent mes données ?
-                <span on:click={toggleWhere}>{showWhere ? '🔼': '🔽'}</span>
+                <span class="expand-btn" on:click={toggleWhere}>{showWhere ? '🔼': '🔽'}</span>
             </h4>
             {#if showWhere}
                 <p>
@@ -129,7 +147,7 @@
             {/if}
             <h4>
                 Avec quelle stack technique ?
-                <span on:click={toggleHow}>{showHow ? '🔼': '🔽'}</span>
+                <span class="expand-btn" on:click={toggleHow}>{showHow ? '🔼': '🔽'}</span>
             </h4>
             {#if showHow}
                 <p>
@@ -166,10 +184,35 @@
     .sidebar {
         position: fixed;
         top: 0;
-        right: 1rem;
+        right: 0;
         width: 16rem;
         border-left: 5px solid var(--velib-blue-dark);
         padding: 1rem .5rem;
+        background-color: whitesmoke;
+        transform: translate3d(0, 0, 0);
+        transition-delay: 0s;
+    }
+    .sidebar.hide {
+        transform: translate3d(85%, 0, 0);
+    }
+    .sidebar h3 {
+        margin: .5rem .5rem .5rem 0;
+    }
+
+    .sidebar .header {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    .close-btn {
+        color: #777;
+        font: 2rem arial, sans-serif;
+        position: relative;
+        left: 0;
+        top: -3px;
+        text-decoration: none;
+        text-shadow: 0 1px 0 #fff;
+        cursor:pointer;
     }
 
     .input-distance {
@@ -209,6 +252,11 @@
 
     .explanations ol, p {
         margin: .2rem;
+    }
+
+    .expand-btn {
+        font-size: 1rem;
+        cursor: s-resize;
     }
 
 </style>

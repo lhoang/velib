@@ -56,12 +56,12 @@ export async function getData(source) {
     return cleanAndSort(operations);
 }
 
-export function getCoursesByMonthAndDay(courses) {
+export function getCoursesByMonthAndDay(courses, nbWheels) {
     const coursesByDay = byDay(courses);
     const coursesByMonths = byMonth(Object.entries(coursesByDay));
     const res = Object.entries(coursesByMonths);
     // get the last 2 months only for now
-    return res.slice(Math.max(res.length - 2, 1))
+    return res.slice(Math.max(res.length - nbWheels, 1))
 }
 
 export function buildDistancePoints(courses, total) {
@@ -77,6 +77,15 @@ export function buildDistancePoints(courses, total) {
 
 // Parsing des timestamps
 const parseTs = timeParse('%Q');
+
+export function findMaxDistanceForWheels(allCourses) {
+    const coursesByDay = byDay(allCourses);
+    const  totalDistances = Object.entries(coursesByDay).map(([, courses]) => {
+        return courses.reduce((acc, elt) => acc + elt.distance, 0);
+    });
+    console.log({totalDistances});
+    return totalDistances.reduce( (a, b) => Math.max(a, b), 10);
+}
 
 export function findMinMax(courses) {
     if (!courses || courses.length === 0) {
