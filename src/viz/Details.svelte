@@ -2,10 +2,10 @@
     import {scaleTime, scaleLinear} from 'd3-scale';
 
     import {detail} from '../velib.store';
-    import {getTime} from "../date.utils";
+    import {getTime, formatDuration} from "../date.utils";
 
     export let width = 600;
-    const margin = {top: 10, right: 50, bottom: 10, left: 25};
+    const margin = {top: 10, right: 100, bottom: 10, left: 25};
     let courses = [];
     let displayCourses = [];
     let day;
@@ -82,6 +82,11 @@
                           text-anchor="start"
                     >
                         {getTime(course.end)}
+                    </text>
+                    <text class="duration" x={xScale(course.x2) + 40} y={20+i*lineHeight}
+                          text-anchor="start"
+                    >
+                        {formatDuration(course.duration)}
                     </text>
                     {#if course.distance > 0.5}
                         <line
@@ -162,6 +167,11 @@
     .time {
         fill: #666666;
         font-size: .6rem;
+    }
+    .duration {
+        fill: #444;
+        font-size: .7rem;
+        font-style: italic;
     }
 
     .close-btn {

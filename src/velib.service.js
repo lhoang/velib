@@ -86,11 +86,10 @@ export function buildDistancePoints(courses, total) {
 // Parsing des timestamps
 const parseTs = timeParse('%Q');
 
-export function findMaxDistanceForWheels(allCourses) {
-    const coursesByDay = byDay(allCourses);
-    const  totalDistances = Object.entries(coursesByDay).map(([, courses]) => {
-        return courses.reduce((acc, elt) => acc + elt.distance, 0);
-    });
+export function findMaxDistanceForWheels(coursesByMonth) {
+    const  totalDistances =  coursesByMonth
+        .flatMap(([,cByDay]) => cByDay)
+        .map(([, courses]) => courses.reduce((acc, elt) => acc + elt.distance, 0));
     return totalDistances.reduce( (a, b) => Math.max(a, b), 10);
 }
 

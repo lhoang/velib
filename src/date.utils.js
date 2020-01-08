@@ -11,3 +11,8 @@ export function getDay(date) {
 export function getTime(date) {
     return dayjs(date).format('HH:mm');
 }
+export function formatDuration(duration) {
+    const min =  Math.floor(duration / 60);
+    const sec = duration % 60;
+    return min ? `${min}min ${sec}s` : `${sec}s`;
+}
