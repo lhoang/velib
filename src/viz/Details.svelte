@@ -1,21 +1,19 @@
 <script>
-    import {scaleTime, scaleLinear} from 'd3-scale';
+    import {scaleLinear} from 'd3-scale';
 
-    import {detail} from '../velib.store';
+    import {detail, currentDay} from '../velib.store';
     import {getTime, formatDuration} from "../date.utils";
 
     export let width = 600;
     const margin = {top: 10, right: 100, bottom: 10, left: 25};
-    let courses = [];
-    let displayCourses = [];
-    let day;
+
     let maxDistance = 0;
 
 
     const lineOffset = 120;
     const offsetY = 20;
     const lineHeight = 30;
-    $: height = courses.length * lineHeight + margin.top + margin.bottom;
+    $: height = $detail.length * lineHeight + margin.top + margin.bottom;
     $: xScale = scaleLinear()
             .domain([0, maxDistance])
             .range([margin.left + lineOffset, width - margin.right]);
@@ -35,22 +33,12 @@
         const dayArr = dayStr.split('-');
         return `${dayArr[2]}/${dayArr[1]}/${dayArr[0]}`;
     };
+    $: [displayCourses, maxDistance] = addCoords($detail);
 
-    $: {
-        const res = $detail;
-        if (res.length > 0) {
-            courses = res[1];
-            day = formatDay(res[0]);
-            [displayCourses, maxDistance] = addCoords(courses);
-        } else {
-            courses = [];
-        }
-    }
-
-    const close = () => detail.set([]);
+    const close = () => currentDay.set(undefined);
 
 </script>
-{#if courses.length > 0}
+{#if $detail.length > 0}
     <div class="container">
 
         <div class="header">
@@ -59,7 +47,7 @@
         </div>
         <div class="part1">
             <div>
-                <span class="label">Date : </span>{day}
+                <span class="label">Date : </span>{formatDay($currentDay)}
             </div>
             <div class="legend">
                 <span class="mecanical">Mécanique</span>

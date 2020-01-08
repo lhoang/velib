@@ -2,7 +2,7 @@
     import {scaleLinear} from 'd3-scale';
     import {arc as d3arc} from 'd3-shape';
     import {getMonthStr} from "../date.utils";
-    import {detail} from '../velib.store';
+    import {currentDay} from '../velib.store';
 
     export let month = '';
     // format : Array<['20191231', Array<Course>]>
@@ -15,7 +15,6 @@
     $: levels = [0, 1, 2, 3].map( v => Math.ceil(v * maxDistance/4));
 
     $: [displayMonth, displayYear] = getMonthStr(month);
-
 
 
     // Note: 31 days for each month (easier)
@@ -47,7 +46,7 @@
             return {shape, course};
         });
 
-        return {outerShape, innerShapes};
+        return {outerShape, innerShapes, day};
     });
 
     const weeks = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30'];
@@ -64,9 +63,7 @@
 
     });
 
-    const displayDetails = (index) => {
-        detail.set(data[index]);
-    }
+    const displayDetails = (selectedDay) => currentDay.set(selectedDay);
 
 </script>
 
@@ -88,8 +85,11 @@
                 {/each}
             </g>
             <g class="data">
-                {#each slices as {outerShape, innerShapes}, index}
-                    <g class="slice" on:click={() => displayDetails(index)}>
+                {#each slices as {outerShape, innerShapes, day}, index}
+                    <g class="slice"
+                       class:selected={day === $currentDay}
+                       id="wheel-day-{day}"
+                       on:click={() => displayDetails(day)}>
                     {#each innerShapes as {shape, course}}
                         <path d="{shape}"
                               class="inner {course.type} {course.isFaulty ? 'faulty' : ''}"
@@ -139,13 +139,13 @@
         fill: transparent;
     }
 
-    .slice:hover {
-        transform: scale(1.2);
+    .slice:hover, .slice.selected {
+        transform: scale(1.1);
         cursor: help;
     }
-    .slice:hover path.outer {
+    .slice:hover path.outer, .slice.selected path.outer{
         stroke-width: 3px;
-        stroke: #333333;
+        stroke: var(--velib-green-dark);
     }
 
     .data path.inner {
@@ -156,8 +156,6 @@
         stroke-width: 3px;
         fill: var(--faulty);
     }
-
-
 
     .title text {
         fill: #333333;

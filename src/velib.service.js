@@ -25,7 +25,9 @@ const clean = (operation) => {
     });
 };
 
-const byDay = groupBy(course => course.day);
+export function byDay (courses){
+    return groupBy(course => course.day)(courses);
+}
 const byMonth = groupBy(([day,]) => day.substring(0, 7));
 
 /**
@@ -64,11 +66,10 @@ export async function getData(source) {
     const operations = await fetch(source)
         .then(response => response.json())
         .then(json => json.walletOperations);
-    return cleanAndSort(operations);
+    return byDay(cleanAndSort(operations));
 }
 
-export function getCoursesByMonthAndDay(courses, nbWheels) {
-    const coursesByDay = byDay(courses);
+export function getCoursesByMonthAndDay(coursesByDay, nbWheels) {
     const coursesByMonths = byMonth(Object.entries(coursesByDay));
     const res = Object.entries(coursesByMonths)
         .sort((a, b) => a[0].localeCompare(b[0]));
@@ -76,9 +77,12 @@ export function getCoursesByMonthAndDay(courses, nbWheels) {
     return res.slice(Math.max(res.length - nbWheels, 1))
 }
 
-export function buildDistancePoints(courses, total) {
+export function buildDistancePoints(coursesByMonth, total) {
     //sorted desc
-    const sorted = courses.sort((a, b) => b.start - a.start);
+    const sorted =  coursesByMonth
+        .flatMap(([,cByDay]) => cByDay)
+        .flatMap(([, courses]) => courses)
+        .sort((a, b) => b.start - a.start);
     let distance = +total;
     sorted.forEach(course => {
         course['totalDistance'] = distance;

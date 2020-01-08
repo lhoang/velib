@@ -3,10 +3,12 @@
     import {axisBottom, axisRight} from 'd3-axis';
     import {timeFormat, timeParse} from 'd3-time-format';
     import {select as d3select} from 'd3-selection';
+    import { bisect } from 'd3-array';
     import {line as d3line, curveStepAfter} from 'd3-shape';
     import {findMinMax} from "../velib.service";
-    import {onMount} from 'svelte';
-    import { afterUpdate } from 'svelte';
+    import {currentDay} from '../velib.store';
+    import {onMount, afterUpdate} from 'svelte';
+    import {getDay, parseDay} from "../date.utils";
 
     export let points = [];
     export let width = 600;
@@ -18,9 +20,12 @@
     ];
 
     const margin = {top: 20, right: 50, bottom: 20, left: 25};
-    let dateMin, dateMax, distanceMin, distanceMax;
+    let dateMin, dateMax, distanceMin, distanceMax, allDates;
     // Parsing des timestamps
     const parseTs = timeParse('%Q');
+
+    let scrollEnabled = true;
+    const toggleScroll = () => scrollEnabled = !scrollEnabled;
 
     $: {
         const minMax = findMinMax(points);
@@ -28,6 +33,7 @@
         dateMax = minMax.dateMax;
         distanceMin = minMax.distanceMin;
         distanceMax = minMax.distanceMax;
+        allDates = points.map(p => parseTs(p.start));
     }
 
 
@@ -46,6 +52,7 @@
             .tickFormat(timeFormat('%d/%m'));
 
     $: yAxis = axisRight().scale(yScale)
+            .ticks(6)
             .tickSize(width - margin.left - margin.right)
             .tickFormat( function (d){
                 return this.parentNode.nextSibling ? d : `${d} km`;
@@ -69,8 +76,16 @@
         };
     });
 
+    const followMouse = (event) => {
+        if (!scrollEnabled) return;
+        const mouseX = event.layerX;
+        const value = getDay(allDates[bisect(allDates, xScale.invert(mouseX))]);
+       // console.log(value);
+        currentDay.set(value);
+    };
+    $: xDay = xScale(parseDay($currentDay));
 
-    function setAxis() {
+    const setAxis = () => {
         // Génération des axes
         d3select('g[ref="xAxis"]').call(xAxis)
                 .call(g => g.select(".domain")
@@ -84,7 +99,7 @@
                 .call(g => g.selectAll(".tick text")
                         .attr("x", 4)
                         .attr("dy", -4));
-    }
+    };
 
     onMount(() => {
         setTimeout(() => {
@@ -97,7 +112,11 @@
 
 <div class="container">
     <h3>Distance totale</h3>
-    <svg width={width} height={height}>
+    <svg width={width} height={height}
+         on:mousemove={followMouse}
+         on:click={toggleScroll}
+         class:scrollable={scrollEnabled}
+    >
         <g class="data">
             <path d="{path}"></path>
         </g>
@@ -109,9 +128,14 @@
                     {label}
                 </text>
             {/each}
-
         </g>
+        <g class="cursor">
+            <line x1="{xDay}" x2="{xDay}"
+                  y1="{margin.top}" y2="{height - margin.bottom}"
+            >
 
+            </line>
+        </g>
 
         <g>
             <g ref="xAxis" transform={`translate(0, ${height - margin.bottom})`}></g>
@@ -149,5 +173,17 @@
         stroke: #666666;
         fill: #666666;
         font-size: .7rem;
+    }
+
+    g.cursor line {
+        stroke: var(--velib-blue-dark);
+        stroke-width: 2px;
+    }
+
+    svg {
+        cursor: pointer;
+    }
+    .scrollable {
+        cursor: col-resize;
     }
 </style>

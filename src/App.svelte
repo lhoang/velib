@@ -3,18 +3,20 @@
     import Distance from './viz/Distance.svelte';
     import Details from './viz/Details.svelte';
     import {getData} from './velib.service.js';
+    import {coursesByDay} from './velib.store';
+
     import {
-        buildDistancePoints,
+        buildDistancePoints, byDay,
         cleanAndSort,
         findMaxDistanceForWheels,
         getCoursesByMonthAndDay
     } from "./velib.service";
 
     export let source = '';
-    let allCourses = [];
+    let allCoursesByDay = [];
     let coursesByMonth = [];
     let distancePoints = [];
-    let totalDistance = 1018.3;
+    let totalDistance = 1146.7;
     let nbWheels = 2;
     let showGetDataExpl = false;
     let showWhere = false;
@@ -24,19 +26,21 @@
     let input = '';
     let errorMsg = undefined;
 
-    $:(async () => getData(source).then(result => allCourses = result))();
+    $:(async () => getData(source).then(result => allCoursesByDay = result))();
 
-    $: coursesByMonth = getCoursesByMonthAndDay(allCourses, nbWheels);
+    $: coursesByDay.set(allCoursesByDay);
+
+    $: coursesByMonth = getCoursesByMonthAndDay(allCoursesByDay, nbWheels);
     $: maxDistance = findMaxDistanceForWheels(coursesByMonth) * 1.2;
 
-    $: distancePoints = buildDistancePoints(allCourses, totalDistance);
+    $: distancePoints = buildDistancePoints(coursesByMonth, totalDistance);
 
     const updateData = () => {
         if (input) {
             try {
                 const userData = JSON.parse(input);
                 if (userData.walletOperations) {
-                    allCourses = cleanAndSort(userData.walletOperations);
+                    allCoursesByDay = byDay(cleanAndSort(userData.walletOperations));
                     errorMsg = undefined;
                 }
             } catch (e) {
@@ -57,6 +61,14 @@
 <main>
     <h1>Stats Vélib</h1>
     <div class="container">
+        <div class="distance">
+            {#if distancePoints.length === 0}
+                ...loading...
+            {:else}
+                <Distance points={distancePoints} height="200" width="700">
+                </Distance>
+            {/if}
+        </div>
         <div class="details">
             <Details></Details>
         </div>
@@ -71,15 +83,6 @@
                            width="350"
                     ></Wheel>
                 {/each}
-            {/if}
-        </div>
-
-        <div class="distance">
-            {#if distancePoints.length === 0}
-                ...loading...
-            {:else}
-                <Distance points={distancePoints} height="300" width="700">
-                </Distance>
             {/if}
         </div>
 
@@ -110,7 +113,7 @@
                 <input type="text" bind:value={totalDistance} size="4"/>km
             </div>
             <div class="input-nb-wheels">
-                <label for="totalDistance">Nombre de roues: </label>
+                <label for="totalDistance">Nombre de mois: </label>
                 <input type="range" bind:value={nbWheels} min="1" max="6"/>
             </div>
             <div class="explanations">
@@ -259,11 +262,22 @@
     }
 
     .container {
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+        grid-template-areas:
+                "distance details"
+                "wheels details";
+    }
+    .distance {
+        grid-area: distance;
+    }
+    .details {
+        grid-area: details;
     }
 
     .wheels {
+        grid-area: wheels;
         display: flex;
         flex-direction: row;
         flex-wrap: wrap;

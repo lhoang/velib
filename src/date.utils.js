@@ -8,6 +8,10 @@ export function getMonthStr(date) {
 export function getDay(date) {
     return dayjs(date).format('YYYY-MM-DD');
 }
+
+export function parseDay(str) {
+    return dayjs(str);
+}
 export function getTime(date) {
     return dayjs(date).format('HH:mm');
 }
