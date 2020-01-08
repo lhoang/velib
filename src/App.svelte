@@ -100,7 +100,7 @@
                     <div class="error">{errorMsg}</div>
                 {/if}
                 <textarea id="inputData" name="data"
-                          rows="3" cols="30"
+                          rows="3" cols="26"
                           bind:value={input}
                           placeholder="Copier-coller ici les données JSON Vélib"
                 ></textarea>
@@ -161,8 +161,11 @@
                         <a href="https://d3js.org/">D3</a>, déployée sur <a href="https://surge.sh/">Surge</a>.
                         <br><a href="https://github.com/lhoang/velib">Dépôt Github</a>
                         <br>
-                        Les vélos défectueux sont détectés de la manière suivante : un vélo est considéré défectueux si
-                        la durée est inférieure à 1 min ou s'il y a eu un changement de vélo en moins de 5 min.
+                        Les vélos défectueux sont détectés de la manière suivante.
+                        <br>Un vélo est considéré défectueux si
+                        la durée est inférieure à 1 min
+                        <br>ou s'il y a eu un changement de vélo en moins de 5 min
+                        <br>ou si la distance est inférieure à 100m.
                     </p>
                 {/if}
             </div>
@@ -199,12 +202,11 @@
         display: flex;
         flex-direction: row;
         flex-wrap: nowrap;
-        flex: 1.5rem 1fr;
     }
 
     .sidebar .border {
         background-color: var(--velib-blue-dark);
-        width: 100%;
+        width: 1.5rem;
     }
 
     .sidebar .content {

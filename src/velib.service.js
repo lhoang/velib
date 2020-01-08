@@ -30,7 +30,8 @@ const byMonth = groupBy(([day,]) => day.substring(0, 7));
 
 /**
  * A bike can be considered faulty if i took another bike within the threshold time (5min)
- * or if the duration is < 60.
+ * or if the duration is < 60
+ * or if the distance is < 100m
  */
 const tagFaulty = (sources) => {
     // Threshold in ms
@@ -38,6 +39,8 @@ const tagFaulty = (sources) => {
     // Duration in s
     const thresholdDuration = 15 * 60;
     const minDuration = 60;
+    // Distance min in km
+    const minDistance = 0.1;
     // courses are already sorted
     for (let i = 0; i < sources.length - 1; i++) {
         const current = sources[i];
@@ -45,7 +48,8 @@ const tagFaulty = (sources) => {
         current.isFaulty = current.duration < minDuration
             || (current.bikeId !== next.bikeId
                 && current.duration < thresholdDuration
-                && (next.start - current.end) <= thresholdSwitch);
+                && (next.start - current.end) <= thresholdSwitch)
+            || (current.distance <= minDistance);
     }
 };
 
