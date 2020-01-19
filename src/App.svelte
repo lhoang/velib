@@ -3,16 +3,18 @@
     import Distance from './viz/Distance.svelte';
     import Details from './viz/Details.svelte';
     import {getData} from './velib.service.js';
-    import {coursesByDay, nbWheels, totalDistance} from './velib.store';
-
+    import {coursesByDay, currentDay, nbWheels, totalDistance} from './velib.store';
     import {
         buildDistancePoints,
         findMaxDistanceForWheels,
         getCoursesByMonthAndDay
     } from "./velib.service";
+    import {addDay, getDay} from "./date.utils";
     import Sidepanel from "./Sidepanel.svelte";
 
     export let source = '';
+    const margin = {top: 10, right: 75, bottom: 10, left: 75};
+    let width;
     let coursesByMonth = [];
     let distancePoints = [];
 
@@ -20,23 +22,33 @@
     $: coursesByMonth = getCoursesByMonthAndDay($coursesByDay, $nbWheels);
     $: maxDistance = findMaxDistanceForWheels(coursesByMonth) * 1.2;
     $: distancePoints = buildDistancePoints(coursesByMonth, $totalDistance);
+    $: displayWidth = width > 800 ? width/2 - margin.left : width;
+
+    const moveRight = (event) => {
+        if (event.key === 'ArrowRight') {
+            currentDay.update(d => getDay(addDay(d, 1)));
+        } else if (event.key === 'ArrowLeft') {
+            currentDay.update(d => getDay(addDay(d, -1)));
+        }
+    }
 
 </script>
 
+<svelte:window on:keydown={moveRight}/>
 
-<main>
+<main bind:clientWidth={width}>
     <h1>Stats Vélib</h1>
     <div class="container">
         <div class="distance">
             {#if distancePoints.length === 0}
                 ...loading...
             {:else}
-                <Distance points={distancePoints} height="200" width="700">
+                <Distance points={distancePoints} height="{displayWidth/3}" width="{displayWidth}">
                 </Distance>
             {/if}
         </div>
         <div class="details">
-            <Details></Details>
+            <Details width={displayWidth * 7/8}></Details>
         </div>
         <div class="wheels">
             {#if coursesByMonth.length === 0}
@@ -46,7 +58,7 @@
                     <Wheel {month}
                            data={courses}
                            {maxDistance}
-                           width="350"
+                           width={displayWidth/2}
                     ></Wheel>
                 {/each}
             {/if}
@@ -75,15 +87,18 @@
 
     .container {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         grid-template-rows: auto;
         grid-template-areas:
-                "distance details"
-                "wheels details";
+                    "distance"
+                    "details"
+                    "wheels";
     }
+
     .distance {
         grid-area: distance;
     }
+
     .details {
         grid-area: details;
     }
@@ -95,4 +110,12 @@
         flex-wrap: wrap;
     }
 
+    @media print, screen and (min-width: 800px) {
+        .container {
+            grid-template-columns: 1fr 1fr;
+            grid-template-areas:
+                    "distance details"
+                    "wheels details";
+        }
+    }
 </style>

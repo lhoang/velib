@@ -42,6 +42,10 @@
             <h3>Données & explications</h3>
             <div class="close-btn" on:click={close}>×</div>
         </div>
+        <p>Pour afficher les détails, survoler et cliquer sur les graphs. <br>
+            ⬅️ et ➡️ pour changer de journée.
+        </p>
+
         <div class="input">
             <label for="inputData">Données JSON :
                 <button class="update-btn" on:click={updateData}>🔄 Rafraîchir</button>

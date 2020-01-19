@@ -11,7 +11,7 @@
     export let maxDistance = 40;
 
     const margin = {top: 20, right: 20, bottom: 20, left: 25};
-    const donutOffset = width/8;
+    $: donutOffset = width/8;
     $: levels = [0, 1, 2, 3].map( v => Math.ceil(v * maxDistance/4));
 
     $: [displayMonth, displayYear] = getMonthStr(month);
@@ -71,8 +71,8 @@
     <svg width={width} height={width}>
         <g transform="translate({width/2}, {width/2})">
             <g class="title">
-                <text x="0" y="0" dy="-8">{displayMonth}</text>
-                <text x="0" y="25" dy="-8">{displayYear}</text>
+                <text x="0" y="0" dy="-5">{displayMonth}</text>
+                <text x="0" y="{width/12}" dy="-5">{displayYear}</text>
             </g>
             <g class="weeks">
                 {#each weekSlices as {shape, name}, i}
@@ -160,7 +160,7 @@
     .title text {
         fill: #333333;
         stroke: #333333;
-        font-size: 1.6rem;
+        font-size: 2vw;
         text-anchor: middle;
     }
 
@@ -169,6 +169,9 @@
         stroke: lightgray;
         stroke-width: 1px;
         stroke-dasharray: 5,2;
+    }
+    .weeks text {
+        font-size: 1vw;
     }
     .levels circle {
         fill: none;
@@ -180,6 +183,6 @@
     .levels text {
         fill: #737373;
         stroke: #737373;
-        font-size: .8rem;
+        font-size: 1vw;
     }
 </style>

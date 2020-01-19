@@ -8,7 +8,7 @@
     import {findMinMax} from "../velib.service";
     import {currentDay} from '../velib.store';
     import {onMount, afterUpdate} from 'svelte';
-    import {getDay, parseDay} from "../date.utils";
+    import {formatDDMM, getDay, parseDay} from "../date.utils";
 
     export let points = [];
     export let width = 600;
@@ -23,6 +23,7 @@
     let dateMin, dateMax, distanceMin, distanceMax, allDates;
     // Parsing des timestamps
     const parseTs = timeParse('%Q');
+    let dataMap = new Map();
 
     let scrollEnabled = true;
     const toggleScroll = () => scrollEnabled = !scrollEnabled;
@@ -34,6 +35,10 @@
         distanceMin = minMax.distanceMin;
         distanceMax = minMax.distanceMax;
         allDates = points.map(p => parseTs(p.start));
+        dataMap = new Map(points.map(p => [
+            p.day,
+            Math.floor(p.totalDistance)
+        ]));
     }
 
 
@@ -46,13 +51,15 @@
             .domain([distanceMin, distanceMax])
             .range([height - margin.bottom, margin.top]);
 
+    $: nbTicks = Math.min(4,Math.floor(width / 100));
+
     // Abscisse
     $: xAxis = axisBottom().scale(xScale)
-            .ticks(6)
+            .ticks(nbTicks)
             .tickFormat(timeFormat('%d/%m'));
 
     $: yAxis = axisRight().scale(yScale)
-            .ticks(6)
+            .ticks(nbTicks)
             .tickSize(width - margin.left - margin.right)
             .tickFormat( function (d){
                 return this.parentNode.nextSibling ? d : `${d} km`;
@@ -84,6 +91,9 @@
         currentDay.set(value);
     };
     $: xDay = xScale(parseDay($currentDay));
+    $: infos = $currentDay && dataMap.get($currentDay)
+            ? [formatDDMM($currentDay),dataMap.get($currentDay)]
+            : [];
 
     const setAxis = () => {
         // Génération des axes
@@ -133,8 +143,18 @@
             <line x1="{xDay}" x2="{xDay}"
                   y1="{margin.top}" y2="{height - margin.bottom}"
             >
-
             </line>
+            {#if infos[0]}
+            <g transform="translate(5, 0)">
+                <rect x="{xDay}" y="{height - margin.bottom - width*4/100}"
+                      width={width*10/100}
+                      height={width*4/100}
+                >
+                </rect>
+                <text x="{xDay}" y={height - margin.bottom} dy="-15"> {infos[0]}</text>
+                <text x="{xDay}" y={height - margin.bottom}> {infos[1]}km</text>
+            </g>
+            {/if}
         </g>
 
         <g>
@@ -152,6 +172,10 @@
 <style>
     h3, text {
         font-family: 'Nunito', sans-serif;
+    }
+
+    text {
+        font-size: 1vw;
     }
 
     .container {
@@ -172,12 +196,21 @@
     g.events text {
         stroke: #666666;
         fill: #666666;
-        font-size: .7rem;
+        font-size: .9vw;
     }
 
     g.cursor line {
         stroke: var(--velib-blue-dark);
         stroke-width: 2px;
+    }
+    g.cursor rect {
+        fill: lightyellow;
+        border-radius: 3px;
+    }
+    g.cursor text {
+        fill: #333333;
+        font-size: .9vw;
+        font-weight: bold;
     }
 
     svg {
