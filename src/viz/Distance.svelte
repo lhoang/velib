@@ -8,6 +8,7 @@
     import {findMinMax} from "../velib.service";
     import {currentDay} from '../velib.store';
     import {onMount, afterUpdate} from 'svelte';
+    import {draw} from 'svelte/transition';
     import {formatDDMM, getDay, parseDay} from "../date.utils";
 
     export let points = [];
@@ -40,7 +41,6 @@
             Math.floor(p.totalDistance)
         ]));
     }
-
 
     // Echelles et Axes
     $: xScale = scaleTime()
@@ -82,6 +82,10 @@
             y2: height - margin.bottom,
         };
     });
+
+    let transitionReset = 0;
+    $:  points ? transitionReset++ : transitionReset;
+
 
     const followMouse = (event) => {
         if (!scrollEnabled) return;
@@ -128,7 +132,16 @@
          class:scrollable={scrollEnabled}
     >
         <g class="data">
-            <path d="{path}"></path>
+            <!-- This is using an {#each} block with one item, when the key changes,
+svelte removes the component
+and adds a new one, therefor triggering the transitions.
+https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-transition-without-a-if-block
+-->
+            {#each [transitionReset] as count (count)}
+            <path in:draw="{{duration: 2000}}"
+                  d="{path}">
+            </path>
+            {/each}
         </g>
         <g class="events">
             {#each eventLines as {x1, x2, y1, y2, label}}

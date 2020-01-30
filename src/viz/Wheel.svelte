@@ -1,6 +1,8 @@
 <script>
     import {scaleLinear} from 'd3-scale';
     import {arc as d3arc} from 'd3-shape';
+    import {fade} from 'svelte/transition';
+    import { cubicOut } from 'svelte/easing';
     import {getMonthStr} from "../date.utils";
     import {currentDay} from '../velib.store';
 
@@ -63,11 +65,26 @@
 
     });
 
+    let transitionReset = 0;
+    $:  data ? transitionReset++ : transitionReset;
+
     const displayDetails = (selectedDay) => currentDay.set(selectedDay);
 
+
+    function spin(node, { duration, startAngle, leftOffset}) {
+        return {
+            duration,
+            css: t => {
+                const eased = cubicOut(t);
+
+                return `transform: translate(${eased* leftOffset - leftOffset}px, 0) rotate(${eased * startAngle - startAngle}deg);`
+            }
+        };
+    }
 </script>
 
-<div class="container">
+{#each [transitionReset] as count (count)}
+<div class="container" in:spin={{duration: 2000, startAngle: 90, leftOffset: 150}}>
     <svg width={width} height={width}>
         <g transform="translate({width/2}, {width/2})">
             <g class="title">
@@ -89,11 +106,12 @@
                     <g class="slice"
                        class:selected={day === $currentDay}
                        id="wheel-day-{day}"
-                       on:click={() => displayDetails(day)}>
+                       on:click={() => displayDetails(day)}
+                       in:fade="{{delay: index*50, duration: 250}}">
                     {#each innerShapes as {shape, course}}
                         <path d="{shape}"
                               class="inner {course.type} {course.isFaulty ? 'faulty' : ''}"
-                              data-bikeid={course.bikeId}
+                              data-bikeid={course.bikeId}>
                         >
                         </path>
                     {/each}
@@ -111,6 +129,7 @@
         </g>
     </svg>
 </div>
+{/each}
 
 <style>
     .container {
