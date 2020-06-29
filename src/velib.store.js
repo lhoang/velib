@@ -12,6 +12,6 @@ export const detail =
     );
 
 export const nbWheels = writable(2);
-export const totalDistance = writable(1267.7);
+export const totalDistance = writable(2005);
 
 

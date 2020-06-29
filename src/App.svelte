@@ -22,7 +22,7 @@
     $: coursesByMonth = getCoursesByMonthAndDay($coursesByDay, $nbWheels);
     $: maxDistance = findMaxDistanceForWheels(coursesByMonth) * 1.2;
     $: distancePoints = buildDistancePoints(coursesByMonth, $totalDistance);
-    $: displayWidth = width > 800 ? width/2 - margin.left : width;
+    $: displayWidth = width > 800 ? Math.min(width/2 - margin.left, 1200) : width;
 
     const moveRight = (event) => {
         if (event.key === 'ArrowRight') {

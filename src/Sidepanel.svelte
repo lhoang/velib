@@ -65,7 +65,7 @@
         </div>
         <div class="input-nb-wheels">
             <label for="totalDistance">Nombre de mois: </label>
-            <input type="range" bind:value={$nbWheels} min="1" max="6"/>
+            <input type="range" bind:value={$nbWheels} min="1" max="10"/>
         </div>
         <div class="explanations">
             <h4>Comment récupérer ses données

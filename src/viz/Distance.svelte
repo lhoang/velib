@@ -3,7 +3,7 @@
     import {axisBottom, axisRight} from 'd3-axis';
     import {timeFormat, timeParse} from 'd3-time-format';
     import {select as d3select} from 'd3-selection';
-    import { bisect } from 'd3-array';
+    import {bisect} from 'd3-array';
     import {line as d3line, curveStepAfter} from 'd3-shape';
     import {findMinMax} from "../velib.service";
     import {currentDay} from '../velib.store';
@@ -14,10 +14,19 @@
     export let points = [];
     export let width = 600;
     export let height = 250;
-    export let events = [{
-        date: new Date(2019, 11, 5),
-        label: 'Début de la grève',
-    },
+    export let events = [
+        {
+            date: new Date(2019, 11, 5),
+            label: 'Début de la grève',
+        },
+        {
+            date: new Date(2020, 2, 17),
+            label: 'Confinement Covid-19'
+        },
+        {
+            date: new Date(2020, 4, 11),
+            label: 'Déconfinement'
+        },
     ];
 
     const margin = {top: 20, right: 50, bottom: 20, left: 25};
@@ -51,7 +60,7 @@
             .domain([distanceMin, distanceMax])
             .range([height - margin.bottom, margin.top]);
 
-    $: nbTicks = Math.min(4,Math.floor(width / 100));
+    $: nbTicks = Math.min(4, Math.floor(width / 100));
 
     // Abscisse
     $: xAxis = axisBottom().scale(xScale)
@@ -61,18 +70,18 @@
     $: yAxis = axisRight().scale(yScale)
             .ticks(nbTicks)
             .tickSize(width - margin.left - margin.right)
-            .tickFormat( function (d){
+            .tickFormat(function (d) {
                 return this.parentNode.nextSibling ? d : `${d} km`;
             });
 
 
     $: path = d3line()
             .curve(curveStepAfter)
-        .x(d => xScale(parseTs(d.start)))
-        .y(d => yScale(d.totalDistance))
-        (points);
+            .x(d => xScale(parseTs(d.start)))
+            .y(d => yScale(d.totalDistance))
+            (points);
 
-    $: eventLines = events.map( event => {
+    $: eventLines = events.map(event => {
         const x = xScale(event.date);
         return {
             label: event.label,
@@ -91,12 +100,12 @@
         if (!scrollEnabled) return;
         const mouseX = event.layerX;
         const value = getDay(allDates[bisect(allDates, xScale.invert(mouseX))]);
-       // console.log(value);
+        // console.log(value);
         currentDay.set(value);
     };
     $: xDay = xScale(parseDay($currentDay));
     $: infos = $currentDay && dataMap.get($currentDay)
-            ? [formatDDMM($currentDay),dataMap.get($currentDay)]
+            ? [formatDDMM($currentDay), dataMap.get($currentDay)]
             : [];
 
     const setAxis = () => {
@@ -138,9 +147,15 @@ and adds a new one, therefor triggering the transitions.
 https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-transition-without-a-if-block
 -->
             {#each [transitionReset] as count (count)}
-            <path in:draw="{{duration: 2000}}"
-                  d="{path}">
-            </path>
+                <path in:draw="{{duration: 2000}}"
+                      d="{path}" id="distance-path">
+                </path>
+<!--                <text class="biker" text-anchor="end">-->
+<!--                    <textPath href="#distance-path"-->
+<!--                              startOffset="90%" in:draw="{{duration: 2000}}">-->
+<!--                        🚵OO-->
+<!--                    </textPath>-->
+<!--                </text>-->
             {/each}
         </g>
         <g class="events">
@@ -158,15 +173,15 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
             >
             </line>
             {#if infos[0]}
-            <g transform="translate(5, 0)">
-                <rect x="{xDay}" y="{height - margin.bottom - width*4/100}"
-                      width={width*10/100}
-                      height={width*4/100}
-                >
-                </rect>
-                <text x="{xDay}" y={height - margin.bottom} dy="-15"> {infos[0]}</text>
-                <text x="{xDay}" y={height - margin.bottom}> {infos[1]}km</text>
-            </g>
+                <g transform="translate(5, 0)">
+                    <rect x="{xDay}" y="{height - margin.bottom - width*4/100}"
+                          width={width*10/100}
+                          height={width*4/100}
+                    >
+                    </rect>
+                    <text x="{xDay}" y={height - margin.bottom} dy="-15"> {infos[0]}</text>
+                    <text x="{xDay}" y={height - margin.bottom}> {infos[1]}km</text>
+                </g>
             {/if}
         </g>
 
@@ -177,9 +192,6 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
     </svg>
 
 </div>
-
-
-
 
 
 <style>
@@ -206,6 +218,7 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
         stroke: var(--faulty);
         stroke-width: 2px;
     }
+
     g.events text {
         stroke: #666666;
         fill: #666666;
@@ -216,10 +229,12 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
         stroke: var(--velib-blue-dark);
         stroke-width: 2px;
     }
+
     g.cursor rect {
         fill: lightyellow;
         border-radius: 3px;
     }
+
     g.cursor text {
         fill: #333333;
         font-size: .9vw;
@@ -229,7 +244,13 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
     svg {
         cursor: pointer;
     }
+
     .scrollable {
         cursor: col-resize;
+    }
+
+    .biker {
+        stroke: black;
+        font-size: 1vw;
     }
 </style>
