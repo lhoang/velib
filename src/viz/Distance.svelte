@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import {scaleTime, scaleLinear} from 'd3-scale';
     import {axisBottom, axisRight} from 'd3-axis';
     import {timeFormat, timeParse} from 'd3-time-format';

@@ -1,4 +1,4 @@
-import dayjs from "dayjs";
+import dayjs from 'dayjs';
 
 export function formatDDMM(date) {
     return dayjs(date).format('DD/MM');

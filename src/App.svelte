@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import Wheel from './viz/Wheel.svelte';
     import Distance from './viz/Distance.svelte';
     import Details from './viz/Details.svelte';

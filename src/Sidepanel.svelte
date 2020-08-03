@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import {coursesByDay, nbWheels, totalDistance} from './velib.store';
     import {byDay, cleanAndSort} from "./velib.service";
 

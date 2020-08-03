@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import {scaleLinear} from 'd3-scale';
     import {arc as d3arc} from 'd3-shape';
     import {fade} from 'svelte/transition';
