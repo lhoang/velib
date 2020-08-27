@@ -31,7 +31,8 @@
         },
     ];
 
-    const margin = {top: 20, right: 50, bottom: 20, left: 25};
+    const margin = {top: 25, right: 50, bottom: 20, left: 25};
+    const eventYOffset = 15;
     let dateMin: Date, dateMax: Date,
             distanceMin: number, distanceMax: number, allDates: Array<Date>;
     // Parsing des timestamps
@@ -164,7 +165,7 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
         <g class="events">
             {#each eventLines as {x1, x2, y1, y2, label}}
                 <line {x1} {x2} {y1} {y2}></line>
-                <text x={x1} y={margin.top}
+                <text x={x1} y={margin.top-eventYOffset}
                       dx="5">
                     {label}
                 </text>
