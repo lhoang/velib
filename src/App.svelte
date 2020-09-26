@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import Wheel from './viz/Wheel.svelte';
     import Distance from './viz/Distance.svelte';
     import Details from './viz/Details.svelte';
@@ -11,12 +11,15 @@
     } from "./velib.service";
     import {addDay, getDay} from "./date.utils";
     import Sidepanel from "./Sidepanel.svelte";
+    import type {Course, CoursesByMonthEntries} from "./models/velib.interface";
 
     export let source = '';
     const margin = {top: 10, right: 75, bottom: 10, left: 75};
-    let width;
-    let coursesByMonth = [];
-    let distancePoints = [];
+    let width = 0;
+    let coursesByMonth: CoursesByMonthEntries = [];
+    let distancePoints: Array<Course> = [];
+    let maxDistance = 0;
+    let displayWidth = 0;
 
     $:(async () => getData(source).then(result => coursesByDay.set(result)))();
     $: coursesByMonth = getCoursesByMonthAndDay($coursesByDay, $nbWheels);
@@ -24,7 +27,7 @@
     $: distancePoints = buildDistancePoints(coursesByMonth, $totalDistance);
     $: displayWidth = width > 800 ? Math.min(width/2 - margin.left, 1200) : width;
 
-    const moveRight = (event) => {
+    const moveRight = (event: KeyboardEvent) => {
         if (event.key === 'ArrowRight') {
             currentDay.update(d => getDay(addDay(d, 1)));
         } else if (event.key === 'ArrowLeft') {
@@ -54,7 +57,7 @@
             {#if coursesByMonth.length === 0}
                 ...loading...
             {:else}
-                {#each coursesByMonth as [month, courses], i}
+                {#each coursesByMonth as [month, courses]}
                     <Wheel {month}
                            data={courses}
                            {maxDistance}
@@ -79,10 +82,6 @@
 
     main {
         margin: 0;
-    }
-
-    h1, h2, h3, text {
-        font-family: 'Nunito', sans-serif;
     }
 
     .container {

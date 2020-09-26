@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import {coursesByDay, nbWheels, totalDistance} from './velib.store';
     import {byDay, cleanAndSort} from "./velib.service";
 
@@ -29,7 +29,6 @@
     const toggleWhere = () => showWhere = !showWhere;
     const toggleHow = () => showHow = !showHow;
     const close = () => showSidebar = false;
-    const open = () => showSidebar = true;
     const toggle = () => showSidebar = !showSidebar;
 
 </script>
@@ -54,14 +53,14 @@
                 <div class="error">{errorMsg}</div>
             {/if}
             <textarea id="inputData" name="data"
-                      rows="3" cols="26"
+                      rows={3} cols={26}
                       bind:value={input}
                       placeholder="Copier-coller ici les données JSON Vélib"
             ></textarea>
         </div>
         <div class="input-distance">
             <label for="totalDistance">Distance totale :&nbsp; </label>
-            <input type="text" bind:value={$totalDistance} size="4"/>km
+            <input type="text" bind:value={$totalDistance} size={4}/>km
         </div>
         <div class="input-nb-wheels">
             <label for="totalDistance">Nombre de mois: </label>
@@ -128,9 +127,6 @@
 
 
 <style>
-    h1, h2, h3, text {
-        font-family: 'Nunito', sans-serif;
-    }
     .sidebar {
         position: fixed;
         top: 0;

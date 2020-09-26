@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import {scaleTime, scaleLinear} from 'd3-scale';
     import {axisBottom, axisRight} from 'd3-axis';
     import {timeFormat, timeParse} from 'd3-time-format';
@@ -10,6 +10,8 @@
     import {onMount, afterUpdate} from 'svelte';
     import {draw} from 'svelte/transition';
     import {formatDDMM, getDay, parseDay} from "../date.utils";
+    import type {Course} from "../models/velib.interface";
+
 
     export let points = [];
     export let width = 600;
@@ -29,8 +31,10 @@
         },
     ];
 
-    const margin = {top: 20, right: 50, bottom: 20, left: 25};
-    let dateMin, dateMax, distanceMin, distanceMax, allDates;
+    const margin = {top: 25, right: 50, bottom: 20, left: 25};
+    const eventYOffset = 15;
+    let dateMin: Date, dateMax: Date,
+            distanceMin: number, distanceMax: number, allDates: Array<Date>;
     // Parsing des timestamps
     const parseTs = timeParse('%Q');
     let dataMap = new Map();
@@ -63,21 +67,21 @@
     $: nbTicks = Math.min(4, Math.floor(width / 100));
 
     // Abscisse
-    $: xAxis = axisBottom().scale(xScale)
+    $: xAxis = axisBottom(xScale)
             .ticks(nbTicks)
             .tickFormat(timeFormat('%d/%m'));
 
-    $: yAxis = axisRight().scale(yScale)
+    $: yAxis = axisRight(yScale)
             .ticks(nbTicks)
             .tickSize(width - margin.left - margin.right)
-            .tickFormat(function (d) {
-                return this.parentNode.nextSibling ? d : `${d} km`;
+            .tickFormat(function (d: number): string {
+                return this.parentNode.nextSibling ? ''+d : `${d} km`;
             });
 
 
-    $: path = d3line()
+    $: path = d3line<Course>()
             .curve(curveStepAfter)
-            .x(d => xScale(parseTs(d.start)))
+            .x(d => xScale(parseTs(''+d.start)))
             .y(d => yScale(d.totalDistance))
             (points);
 
@@ -96,9 +100,9 @@
     $:  points ? transitionReset++ : transitionReset;
 
 
-    const followMouse = (event) => {
+    const followMouse = (event: MouseEvent) => {
         if (!scrollEnabled) return;
-        const mouseX = event.layerX;
+        const mouseX = event.offsetX;
         const value = getDay(allDates[bisect(allDates, xScale.invert(mouseX))]);
         // console.log(value);
         currentDay.set(value);
@@ -110,10 +114,10 @@
 
     const setAxis = () => {
         // Génération des axes
-        d3select('g[ref="xAxis"]').call(xAxis)
+        d3select('g#xAxis').call(xAxis)
                 .call(g => g.select(".domain")
                         .remove());
-        d3select('g[ref="yAxis"]').call(yAxis)
+        d3select('g#yAxis').call(yAxis)
                 .call(g => g.select(".domain")
                         .remove())
                 .call(g => g.selectAll(".tick line")
@@ -161,7 +165,7 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
         <g class="events">
             {#each eventLines as {x1, x2, y1, y2, label}}
                 <line {x1} {x2} {y1} {y2}></line>
-                <text x={x1} y={margin.top}
+                <text x={x1} y={margin.top-eventYOffset}
                       dx="5">
                     {label}
                 </text>
@@ -186,8 +190,8 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
         </g>
 
         <g>
-            <g ref="xAxis" transform={`translate(0, ${height - margin.bottom})`}></g>
-            <g ref="yAxis" transform={`translate(${margin.left}, 0)`}></g>
+            <g id="xAxis" transform={`translate(0, ${height - margin.bottom})`}></g>
+            <g id="yAxis" transform={`translate(${margin.left}, 0)`}></g>
         </g>
     </svg>
 
@@ -247,10 +251,5 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
 
     .scrollable {
         cursor: col-resize;
-    }
-
-    .biker {
-        stroke: black;
-        font-size: 1vw;
     }
 </style>
