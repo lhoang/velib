@@ -23,11 +23,15 @@
         },
         {
             date: new Date(2020, 2, 17),
-            label: 'Confinement Covid-19'
+            label: 'Confinement'
         },
         {
             date: new Date(2020, 4, 11),
             label: 'Déconfinement'
+        },
+        {
+            date: new Date(2020, 9, 30),
+            label: '2e confinement'
         },
     ];
 
@@ -64,7 +68,7 @@
             .domain([distanceMin, distanceMax])
             .range([height - margin.bottom, margin.top]);
 
-    $: nbTicks = Math.min(4, Math.floor(width / 100));
+    $: nbTicks = Math.min(6, Math.floor(width / 100));
 
     // Abscisse
     $: xAxis = axisBottom(xScale)
@@ -154,21 +158,17 @@ https://stackoverflow.com/questions/59062025/is-there-a-way-to-perform-svelte-tr
                 <path in:draw="{{duration: 2000}}"
                       d="{path}" id="distance-path">
                 </path>
-<!--                <text class="biker" text-anchor="end">-->
-<!--                    <textPath href="#distance-path"-->
-<!--                              startOffset="90%" in:draw="{{duration: 2000}}">-->
-<!--                        🚵OO-->
-<!--                    </textPath>-->
-<!--                </text>-->
             {/each}
         </g>
         <g class="events">
-            {#each eventLines as {x1, x2, y1, y2, label}}
-                <line {x1} {x2} {y1} {y2}></line>
-                <text x={x1} y={margin.top-eventYOffset}
-                      dx="5">
-                    {label}
-                </text>
+            {#each eventLines as {x1, x2, y1, y2, label}, i}
+                {#if x1>0}
+                    <line {x1} {x2} {y1} {y2}></line>
+                    <text x={x1} y={margin.top-eventYOffset + i* 15}
+                          dx="5">
+                        {label}
+                    </text>
+                {/if}
             {/each}
         </g>
         <g class="cursor">
