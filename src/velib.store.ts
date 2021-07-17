@@ -13,6 +13,6 @@ export const detail: Readable<Array<Course>> =
     );
 
 export const nbWheels = writable<number>(2);
-export const totalDistance = writable<number>(2937);
+export const totalDistance = writable<number>(3986);
 
 
